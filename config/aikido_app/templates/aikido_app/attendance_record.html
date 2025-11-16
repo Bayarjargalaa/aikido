@@ -1,0 +1,551 @@
+{% extends 'aikido_app/base.html' %}
+
+{% block title %}Ирц бүртгэх - Айкидо Сургалт{% endblock %}
+{% block page_title %}Ирц бүртгэх{% endblock %}
+{% block page_subtitle %}Сурагчдын ирц бүртгэх{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+    <!-- Filters -->
+    <form method="get" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Class Type Filter -->
+        <div>
+            <label for="class_type" class="block text-sm font-semibold text-gray-700 mb-2">
+                <i class="fas fa-graduation-cap mr-2 text-blue-500"></i>Ангийн төрөл
+            </label>
+            <select name="class_type" 
+                    id="class_type"
+                    onchange="this.form.submit()"
+                    class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all duration-200">
+                <option value="">Бүх анги</option>
+                {% for ct in class_types %}
+                <option value="{{ ct.name }}" {% if selected_class_type == ct.name %}selected{% endif %}>
+                    {{ ct.get_name_display }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Month Filter -->
+        <div>
+            <label for="month" class="block text-sm font-semibold text-gray-700 mb-2">
+                <i class="fas fa-calendar mr-2 text-purple-500"></i>Сар
+            </label>
+            <input type="month" 
+                   name="month" 
+                   id="month"
+                   value="{{ selected_month }}"
+                   onchange="this.form.submit()"
+                   class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all duration-200">
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-end gap-2">
+            <button type="button" 
+                    onclick="window.location.href='{% url 'attendance_record' %}'"
+                    class="flex-1 px-4 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors">
+                <i class="fas fa-redo mr-2"></i>Цэвэрлэх
+            </button>
+            <button type="button"
+                    onclick="saveAttendance()"
+                    class="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white font-bold rounded-lg hover:from-green-700 hover:to-blue-700 transition-all">
+                <i class="fas fa-save mr-2"></i>Хадгалах
+            </button>
+        </div>
+    </form>
+</div>
+
+{% if messages %}
+<div class="mb-6">
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}bg-red-50 border-l-4 border-red-500 text-red-700{% else %}bg-green-50 border-l-4 border-green-500 text-green-700{% endif %} p-4 rounded-lg" role="alert">
+        <div class="flex items-center">
+            <i class="fas {% if message.tags == 'error' %}fa-exclamation-circle{% else %}fa-check-circle{% endif %} mr-3"></i>
+            <p>{{ message }}</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Attendance Grid -->
+<div class="bg-white rounded-xl shadow-lg overflow-hidden">
+    {% if students %}
+    <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
+        <table class="w-full relative">
+            <thead class="bg-gradient-to-r from-blue-600 to-purple-600 text-white sticky top-0 z-20 shadow-md">
+                <tr>
+                    <th class="py-4 px-6 text-left font-semibold sticky left-0 bg-blue-600 z-30">№</th>
+                    <th class="py-4 px-6 text-left font-semibold sticky left-12 bg-blue-600 z-30 min-w-[200px]">Сурагч</th>
+                    {% for date in dates %}
+                    <th class="py-2 px-3 text-center font-semibold min-w-[180px]">
+                        <div class="text-sm font-bold mb-1">{{ date.weekday }}</div>
+                        <div class="text-xs opacity-90 mb-2">{{ date.date|date:"m/d" }}</div>
+                        
+                        <!-- Instructor Assignment Section -->
+                        <div class="space-y-1 text-xs font-normal">
+                            <!-- Lead Instructor -->
+                            <div class="bg-blue-500 bg-opacity-30 rounded px-2 py-1">
+                                <div class="text-yellow-200 font-semibold mb-0.5">Ахлах багш:</div>
+                                <select class="lead-instructor-select w-full text-xs bg-white text-gray-800 rounded px-1 py-0.5 cursor-pointer"
+                                        data-date="{{ date.date|date:'Y-m-d' }}"
+                                        data-role="lead">
+                                    <option value="">-- Сонгох --</option>
+                                    <option value="NO_CLASS" class="text-red-600 font-semibold"
+                                            {% if date.lead_instructor == 'NO_CLASS' %}selected{% endif %}>
+                                        🚫 Хичээл ороогүй
+                                    </option>
+                                    {% for instructor in all_instructors %}
+                                    <option value="{{ instructor.id }}"
+                                            {% if date.lead_instructor and date.lead_instructor != 'NO_CLASS' and date.lead_instructor.id == instructor.id %}selected{% endif %}>
+                                        {{ instructor.first_name }} {{ instructor.last_name|slice:":1" }}.
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Assistant Instructor -->
+                            <div class="bg-purple-500 bg-opacity-30 rounded px-2 py-1">
+                                <div class="text-yellow-200 font-semibold mb-0.5">Туслах багш:</div>
+                                <select class="assistant-instructor-select w-full text-xs bg-white text-gray-800 rounded px-1 py-0.5 cursor-pointer"
+                                        data-date="{{ date.date|date:'Y-m-d' }}"
+                                        data-role="assistant">
+                                    <option value="">-- Сонгох --</option>
+                                    <option value="NO_CLASS" class="text-red-600 font-semibold"
+                                            {% if date.assistant_instructor == 'NO_CLASS' %}selected{% endif %}>
+                                        🚫 Хичээл ороогүй
+                                    </option>
+                                    {% for instructor in all_instructors %}
+                                    <option value="{{ instructor.id }}"
+                                            {% if date.assistant_instructor and date.assistant_instructor != 'NO_CLASS' and date.assistant_instructor.id == instructor.id %}selected{% endif %}>
+                                        {{ instructor.first_name }} {{ instructor.last_name|slice:":1" }}.
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </th>
+                    {% endfor %}
+                    <th class="py-4 px-6 text-center font-semibold sticky right-0 bg-purple-600 z-30">Нийт</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for student in students %}
+                <tr class="hover:bg-blue-50 transition-colors">
+                    <td class="py-4 px-6 text-gray-600 sticky left-0 bg-white z-10">{{ forloop.counter }}</td>
+                    <td class="py-4 px-6 sticky left-12 bg-white z-10">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                                <span class="text-white font-bold text-sm">{{ student.first_name|slice:":1" }}</span>
+                            </div>
+                            <div class="min-w-0">
+                                <p class="font-medium text-gray-800 truncate">{{ student.last_name }} {{ student.first_name }}</p>
+                                <p class="text-xs text-gray-500">
+                                    {% for ct in student.class_types.all %}
+                                    <span class="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs mr-1">
+                                        {{ ct.get_name_display }}
+                                    </span>
+                                    {% endfor %}
+                                </p>
+                            </div>
+                        </div>
+                    </td>
+                    {% for date in dates %}
+                    <td class="py-4 px-6 text-center">
+                        <label class="inline-flex items-center justify-center cursor-pointer">
+                            <input type="checkbox" 
+                                   class="attendance-checkbox w-6 h-6 text-green-600 rounded focus:ring-2 focus:ring-green-500"
+                                   data-student-id="{{ student.id }}"
+                                   data-date="{{ date.date|date:'Y-m-d' }}"
+                                   {% if date.date|date:'Y-m-d' in student.attendance_dates %}checked{% endif %}>
+                        </label>
+                    </td>
+                    {% endfor %}
+                    <td class="py-4 px-6 text-center sticky right-0 bg-white z-10">
+                        <span class="inline-flex items-center justify-center w-10 h-10 bg-blue-100 text-blue-800 rounded-full font-bold" 
+                              id="total-{{ student.id }}">
+                            {{ student.attendance_count }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="py-16 text-center">
+        <div class="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-user-graduate text-4xl text-gray-400"></i>
+        </div>
+        <h3 class="text-xl font-bold text-gray-700 mb-2">Сурагч олдсонгүй</h3>
+        <p class="text-gray-500 mb-6">
+            {% if selected_class_type %}
+                {{ selected_class_type }} ангид сурагч бүртгэгдээгүй байна
+            {% else %}
+                Сурагч нэмэхийн тулд админ хэсэг рүү орно уу
+            {% endif %}
+        </p>
+        <a href="{% url 'student_list' %}" 
+           class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700">
+            <i class="fas fa-plus mr-2"></i>Сурагч нэмэх
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Info Card -->
+{% if students %}
+<div class="mt-6 bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
+    <div class="flex">
+        <div class="flex-shrink-0">
+            <i class="fas fa-info-circle text-blue-500 text-xl"></i>
+        </div>
+        <div class="ml-3">
+            <h3 class="text-sm font-medium text-blue-800">Зааварчилгаа</h3>
+            <div class="mt-2 text-sm text-blue-700">
+                <ul class="list-disc list-inside space-y-1">
+                    <li>Огноо бүрт ахлах болон туслах багшийг сонгоно</li>
+                    <li>Checkbox-г дарж ирц бүртгэнэ</li>
+                    <li>"Хадгалах" товч дарж хадгална</li>
+                    <li>Нийт багана автоматаар тооцогдоно</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Instructor Statistics -->
+<div class="mt-6">
+    <div class="bg-gradient-to-r from-purple-600 to-blue-600 rounded-t-xl shadow-lg p-4">
+        <h3 class="text-white text-lg font-bold flex items-center">
+            <i class="fas fa-chart-line mr-3"></i>
+            Багш нарын статистик
+            {% if selected_class_type %}
+                <span class="ml-2 px-3 py-1 bg-white bg-opacity-20 rounded-full text-sm">
+                    {% for ct in class_types %}
+                        {% if ct.name == selected_class_type %}
+                            {{ ct.get_name_display }} анги
+                        {% endif %}
+                    {% endfor %}
+                </span>
+            {% else %}
+                <span class="ml-2 px-3 py-1 bg-white bg-opacity-20 rounded-full text-sm">
+                    Бүх анги
+                </span>
+            {% endif %}
+            <span class="ml-2 text-sm font-normal opacity-90">
+                ({{ selected_month|date:"Y оны m сар" }})
+            </span>
+        </h3>
+    </div>
+    
+    {% if instructor_stats %}
+    <div class="bg-white rounded-b-xl shadow-lg overflow-hidden">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+            {% for stat in instructor_stats %}
+            <div class="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-4 border-2 border-blue-200 hover:border-purple-400 transition-all duration-200 transform hover:scale-105">
+                <!-- Instructor Info -->
+                <div class="flex items-center mb-3">
+                    <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                        <span class="text-white font-bold text-lg">{{ stat.instructor.first_name|slice:":1" }}</span>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="font-bold text-gray-800 truncate">{{ stat.instructor.last_name }} {{ stat.instructor.first_name }}</p>
+                        <p class="text-xs text-gray-500">{{ stat.instructor.get_rank_display_full }}</p>
+                    </div>
+                </div>
+                
+                <!-- Stats -->
+                <div class="space-y-2">
+                    {% if selected_class_type %}
+                    <!-- Single class type selected - show simplified view -->
+                    <!-- Lead Count -->
+                    <div class="bg-white bg-opacity-70 rounded-lg p-2 flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center mr-2">
+                                <i class="fas fa-star text-white text-xs"></i>
+                            </div>
+                            <span class="text-sm text-gray-700 font-medium">Ахлах багш</span>
+                        </div>
+                        <span class="text-lg font-bold text-yellow-700">{{ stat.lead_count }}</span>
+                    </div>
+                    
+                    <!-- Assistant Count -->
+                    <div class="bg-white bg-opacity-70 rounded-lg p-2 flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-blue-400 rounded-full flex items-center justify-center mr-2">
+                                <i class="fas fa-hands-helping text-white text-xs"></i>
+                            </div>
+                            <span class="text-sm text-gray-700 font-medium">Туслах багш</span>
+                        </div>
+                        <span class="text-lg font-bold text-blue-700">{{ stat.assistant_count }}</span>
+                    </div>
+                    
+                    <!-- Total -->
+                    <div class="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-2 flex items-center justify-between">
+                        <span class="text-sm text-white font-bold">
+                            <i class="fas fa-calendar-check mr-1"></i>Нийт хичээл
+                        </span>
+                        <span class="text-2xl font-bold text-white">{{ stat.total }}</span>
+                    </div>
+                    
+                    {% else %}
+                    <!-- All classes - show breakdown by class type -->
+                    {% if stat.stats_by_class.MORNING %}
+                    <div class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-2 border border-amber-200">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-semibold text-amber-800">
+                                <i class="fas fa-sun mr-1"></i>Өглөө
+                            </span>
+                            <span class="text-sm font-bold text-amber-900">{{ stat.stats_by_class.MORNING.total }}</span>
+                        </div>
+                        <div class="flex gap-2 text-xs">
+                            <div class="flex-1 bg-white bg-opacity-60 rounded px-1.5 py-0.5">
+                                <span class="text-amber-700">Ахлах:</span>
+                                <span class="font-bold text-amber-900">{{ stat.stats_by_class.MORNING.lead }}</span>
+                            </div>
+                            <div class="flex-1 bg-white bg-opacity-60 rounded px-1.5 py-0.5">
+                                <span class="text-amber-700">Туслах:</span>
+                                <span class="font-bold text-amber-900">{{ stat.stats_by_class.MORNING.assistant }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if stat.stats_by_class.EVENING %}
+                    <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-2 border border-indigo-200">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-semibold text-indigo-800">
+                                <i class="fas fa-moon mr-1"></i>Орой
+                            </span>
+                            <span class="text-sm font-bold text-indigo-900">{{ stat.stats_by_class.EVENING.total }}</span>
+                        </div>
+                        <div class="flex gap-2 text-xs">
+                            <div class="flex-1 bg-white bg-opacity-60 rounded px-1.5 py-0.5">
+                                <span class="text-indigo-700">Ахлах:</span>
+                                <span class="font-bold text-indigo-900">{{ stat.stats_by_class.EVENING.lead }}</span>
+                            </div>
+                            <div class="flex-1 bg-white bg-opacity-60 rounded px-1.5 py-0.5">
+                                <span class="text-indigo-700">Туслах:</span>
+                                <span class="font-bold text-indigo-900">{{ stat.stats_by_class.EVENING.assistant }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if stat.stats_by_class.CHILDREN %}
+                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-2 border border-green-200">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-semibold text-green-800">
+                                <i class="fas fa-child mr-1"></i>Хүүхэд
+                            </span>
+                            <span class="text-sm font-bold text-green-900">{{ stat.stats_by_class.CHILDREN.total }}</span>
+                        </div>
+                        <div class="flex gap-2 text-xs">
+                            <div class="flex-1 bg-white bg-opacity-60 rounded px-1.5 py-0.5">
+                                <span class="text-green-700">Ахлах:</span>
+                                <span class="font-bold text-green-900">{{ stat.stats_by_class.CHILDREN.lead }}</span>
+                            </div>
+                            <div class="flex-1 bg-white bg-opacity-60 rounded px-1.5 py-0.5">
+                                <span class="text-green-700">Туслах:</span>
+                                <span class="font-bold text-green-900">{{ stat.stats_by_class.CHILDREN.assistant }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Total Summary -->
+                    <div class="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-2 flex items-center justify-between">
+                        <span class="text-sm text-white font-bold">
+                            <i class="fas fa-calculator mr-1"></i>Нийт
+                        </span>
+                        <div class="text-right">
+                            <div class="text-xs text-white opacity-80">
+                                А:{{ stat.lead_count }} / Т:{{ stat.assistant_count }}
+                            </div>
+                            <div class="text-2xl font-bold text-white leading-none">{{ stat.total }}</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white rounded-b-xl shadow-lg p-6 text-center">
+        <div class="text-gray-400 mb-2">
+            <i class="fas fa-chart-line text-4xl"></i>
+        </div>
+        <p class="text-gray-600">
+            {% if selected_class_type %}
+            Энэ сард багш томилогдоогүй байна
+            {% else %}
+            Анги сонгоно уу
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Update totals when checkbox changes
+    document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const studentId = this.dataset.studentId;
+            const total = document.querySelectorAll(`input[data-student-id="${studentId}"]:checked`).length;
+            document.getElementById(`total-${studentId}`).textContent = total;
+        });
+    });
+
+    // Save instructor assignments
+    document.querySelectorAll('.lead-instructor-select, .assistant-instructor-select').forEach(select => {
+        select.addEventListener('change', function() {
+            const date = this.dataset.date;
+            const role = this.dataset.role;
+            const instructorId = this.value;
+            
+            // If NO_CLASS is selected on lead instructor, clear assistant instructor
+            if (role === 'lead' && instructorId === 'NO_CLASS') {
+                const assistantSelect = document.querySelector(`.assistant-instructor-select[data-date="${date}"]`);
+                if (assistantSelect) {
+                    assistantSelect.value = '';
+                }
+            }
+            
+            // If NO_CLASS is selected on assistant instructor, clear lead instructor
+            if (role === 'assistant' && instructorId === 'NO_CLASS') {
+                const leadSelect = document.querySelector(`.lead-instructor-select[data-date="${date}"]`);
+                if (leadSelect) {
+                    leadSelect.value = '';
+                }
+            }
+            
+            // Get both lead and assistant for this date
+            const leadSelect = document.querySelector(`.lead-instructor-select[data-date="${date}"]`);
+            const assistantSelect = document.querySelector(`.assistant-instructor-select[data-date="${date}"]`);
+            
+            const requestData = {
+                date: date,
+                lead_instructor_id: leadSelect ? leadSelect.value : null,
+                assistant_instructor_id: assistantSelect ? assistantSelect.value : null,
+                class_type: '{{ selected_class_type }}'
+            };
+            
+            // Send via AJAX
+            fetch('{% url "assign_instructors" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success indicator
+                    this.classList.add('ring-2', 'ring-green-400');
+                    setTimeout(() => {
+                        this.classList.remove('ring-2', 'ring-green-400');
+                    }, 1000);
+                } else {
+                    alert('Алдаа гарлаа: ' + (data.error || 'Тодорхойгүй алдаа'));
+                    location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Сүлжээний алдаа гарлаа');
+                location.reload();
+            });
+        });
+    });
+
+    // Save attendance
+    function saveAttendance() {
+        const attendanceData = [];
+        const attendanceDates = new Set(); // Track which dates have attendance
+        
+        document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
+            if (checkbox.checked) {
+                attendanceData.push({
+                    student_id: checkbox.dataset.studentId,
+                    date: checkbox.dataset.date
+                });
+                attendanceDates.add(checkbox.dataset.date); // Add to set of dates
+            }
+        });
+
+        if (attendanceData.length === 0) {
+            alert('Хадгалах ирц байхгүй байна');
+            return;
+        }
+
+        // Collect instructor assignments ONLY for dates that have attendance
+        const instructorAssignments = [];
+        document.querySelectorAll('.lead-instructor-select').forEach(select => {
+            const date = select.dataset.date;
+            
+            // Only process dates that have at least one attendance record
+            if (!attendanceDates.has(date)) {
+                return; // Skip this date
+            }
+            
+            const leadInstructorId = select.value || '';
+            const assistantSelect = document.querySelector(`.assistant-instructor-select[data-date="${date}"]`);
+            const assistantInstructorId = assistantSelect ? (assistantSelect.value || '') : '';
+            
+            // Check if "NO_CLASS" is selected
+            const isNoClass = leadInstructorId === 'NO_CLASS' || assistantInstructorId === 'NO_CLASS';
+            
+            // If NO_CLASS is selected, send it as a special marker
+            // Otherwise, only add if at least one instructor is selected
+            if (isNoClass) {
+                instructorAssignments.push({
+                    date: date,
+                    lead_instructor_id: 'NO_CLASS',
+                    assistant_instructor_id: null
+                });
+            } else if (leadInstructorId || assistantInstructorId) {
+                instructorAssignments.push({
+                    date: date,
+                    lead_instructor_id: leadInstructorId || null,
+                    assistant_instructor_id: assistantInstructorId || null
+                });
+            }
+        });
+
+        // Send via AJAX
+        fetch('{% url "attendance_record" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ 
+                attendance: attendanceData,
+                instructor_assignments: instructorAssignments,
+                class_type: '{{ selected_class_type }}'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Ирц амжилттай хадгалагдлаа!');
+                location.reload();
+            } else {
+                alert('Алдаа гарлаа: ' + (data.error || 'Тодорхойгүй алдаа'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Сүлжээний алдаа гарлаа');
+        });
+    }
+</script>
+{% endblock %}

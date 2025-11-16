@@ -1,0 +1,276 @@
+{% extends 'aikido_app/base.html' %}
+
+{% block title %}Багш нар - Айкидо Сургалт{% endblock %}
+{% block page_title %}Багш нар{% endblock %}
+{% block page_subtitle %}Хичээл заадаг багш нарын жагсаалт{% endblock %}
+
+{% block content %}
+<!-- Filter and Add Bar -->
+<div class="bg-white rounded-xl shadow-lg p-4 lg:p-6 mb-6">
+    <div class="flex flex-col gap-4">
+        <!-- Filters -->
+        <div class="flex flex-col sm:flex-row gap-3">
+            <select id="sortSelect" onchange="updateSort(this.value)" class="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2.5">
+                <option value="name_asc" {% if current_sort == 'name_asc' %}selected{% endif %}>Нэр: А → Я</option>
+                <option value="name_desc" {% if current_sort == 'name_desc' %}selected{% endif %}>Нэр: Я → А</option>
+                <option value="date_desc" {% if current_sort == 'date_desc' %}selected{% endif %}>Огноо: Шинэ → Хуучин</option>
+                <option value="date_asc" {% if current_sort == 'date_asc' %}selected{% endif %}>Огноо: Хуучин → Шинэ</option>
+                <option value="rank_desc" {% if current_sort == 'rank_desc' %}selected{% endif %}>Зэрэг: Өндөр → Бага</option>
+                <option value="rank_asc" {% if current_sort == 'rank_asc' %}selected{% endif %}>Зэрэг: Бага → Өндөр</option>
+            </select>
+            
+            <label class="flex items-center cursor-pointer px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg">
+                <input type="checkbox" 
+                       id="showInactive" 
+                       onchange="toggleInactive(this.checked)"
+                       {% if show_inactive %}checked{% endif %}
+                       class="w-5 h-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500 mr-2">
+                <span class="text-sm text-gray-700 whitespace-nowrap">Идэвхгүй багш</span>
+            </label>
+        </div>
+        
+        <!-- Add Button -->
+        <a href="{% url 'instructor_create' %}" 
+           class="inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-pink-700 transform hover:scale-[1.02] transition-all duration-200 shadow-lg">
+            <i class="fas fa-user-plus mr-2"></i>
+            Шинэ багш нэмэх
+        </a>
+    </div>
+</div>
+
+{% if messages %}
+<div class="mb-6">
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}bg-red-50 border-l-4 border-red-500 text-red-700{% else %}bg-green-50 border-l-4 border-green-500 text-green-700{% endif %} p-4 rounded-lg" role="alert">
+        <div class="flex items-center">
+            <i class="fas {% if message.tags == 'error' %}fa-exclamation-circle{% else %}fa-check-circle{% endif %} mr-3"></i>
+            <p>{{ message }}</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {% for instructor in instructors %}
+    <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-2xl transition-all duration-300">
+        <div class="flex items-start justify-between mb-4">
+            <div class="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                <span class="text-white text-2xl font-bold">{{ instructor.first_name|slice:":1" }}{{ instructor.last_name|slice:":1" }}</span>
+            </div>
+            {% if instructor.is_active %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                <i class="fas fa-check-circle mr-1"></i> Идэвхтэй
+            </span>
+            {% endif %}
+        </div>
+        
+        <h3 class="text-xl font-bold text-gray-800 mb-2">{{ instructor.last_name }} {{ instructor.first_name }}</h3>
+        
+        {% if instructor.kyu_rank or instructor.dan_rank %}
+        <div class="mb-3">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold {% if instructor.dan_rank %}bg-gradient-to-r from-red-500 to-orange-500 text-white{% else %}bg-gradient-to-r from-yellow-400 to-yellow-500 text-gray-800{% endif %}">
+                <i class="fas fa-{% if instructor.dan_rank %}trophy{% else %}medal{% endif %} mr-2"></i>
+                {{ instructor.get_rank_display_full }}
+            </span>
+        </div>
+        {% endif %}
+        
+        <div class="space-y-2 text-sm text-gray-600 mb-4">
+            <div class="flex items-center">
+                <i class="fas fa-phone w-5 text-purple-500"></i>
+                <span class="ml-2">{{ instructor.phone }}</span>
+            </div>
+            {% if instructor.email %}
+            <div class="flex items-center">
+                <i class="fas fa-envelope w-5 text-blue-500"></i>
+                <span class="ml-2">{{ instructor.email }}</span>
+            </div>
+            {% endif %}
+            <div class="flex items-center">
+                <i class="fas fa-calendar w-5 text-green-500"></i>
+                <span class="ml-2">Ажилд орсон: {{ instructor.hire_date|date:"Y-m-d" }}</span>
+            </div>
+        </div>
+
+        <div class="border-t pt-4">
+            <p class="text-sm text-gray-500 mb-3 font-semibold">Хичээл заасан статистик</p>
+            
+            <!-- Statistics Grid -->
+            <div class="space-y-2">
+                <!-- Morning Classes -->
+                <div class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-3 border border-amber-200">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-amber-800">
+                            <i class="fas fa-sun mr-1"></i>Өглөө
+                        </span>
+                        <span class="text-xs text-amber-600">
+                            {{ instructor.stats.morning.lead|add:instructor.stats.morning.assistant }} хичээл
+                        </span>
+                    </div>
+                    <div class="flex gap-2 text-xs">
+                        <div class="flex-1 bg-white bg-opacity-60 rounded px-2 py-1">
+                            <span class="text-amber-700">Ахлах:</span>
+                            <span class="font-bold text-amber-900">{{ instructor.stats.morning.lead }}</span>
+                        </div>
+                        <div class="flex-1 bg-white bg-opacity-60 rounded px-2 py-1">
+                            <span class="text-amber-700">Туслах:</span>
+                            <span class="font-bold text-amber-900">{{ instructor.stats.morning.assistant }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Evening Classes -->
+                <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-3 border border-indigo-200">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-indigo-800">
+                            <i class="fas fa-moon mr-1"></i>Орой
+                        </span>
+                        <span class="text-xs text-indigo-600">
+                            {{ instructor.stats.evening.lead|add:instructor.stats.evening.assistant }} хичээл
+                        </span>
+                    </div>
+                    <div class="flex gap-2 text-xs">
+                        <div class="flex-1 bg-white bg-opacity-60 rounded px-2 py-1">
+                            <span class="text-indigo-700">Ахлах:</span>
+                            <span class="font-bold text-indigo-900">{{ instructor.stats.evening.lead }}</span>
+                        </div>
+                        <div class="flex-1 bg-white bg-opacity-60 rounded px-2 py-1">
+                            <span class="text-indigo-700">Туслах:</span>
+                            <span class="font-bold text-indigo-900">{{ instructor.stats.evening.assistant }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Children Classes -->
+                <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-green-800">
+                            <i class="fas fa-child mr-1"></i>Хүүхэд
+                        </span>
+                        <span class="text-xs text-green-600">
+                            {{ instructor.stats.children.lead|add:instructor.stats.children.assistant }} хичээл
+                        </span>
+                    </div>
+                    <div class="flex gap-2 text-xs">
+                        <div class="flex-1 bg-white bg-opacity-60 rounded px-2 py-1">
+                            <span class="text-green-700">Ахлах:</span>
+                            <span class="font-bold text-green-900">{{ instructor.stats.children.lead }}</span>
+                        </div>
+                        <div class="flex-1 bg-white bg-opacity-60 rounded px-2 py-1">
+                            <span class="text-green-700">Туслах:</span>
+                            <span class="font-bold text-green-900">{{ instructor.stats.children.assistant }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Total Summary -->
+                <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-3 text-white">
+                    <div class="flex items-center justify-between text-sm font-bold">
+                        <span><i class="fas fa-chart-bar mr-1"></i>Нийт</span>
+                        <span>{{ instructor.stats.total_lead|add:instructor.stats.total_assistant }} хичээл</span>
+                    </div>
+                    <div class="flex gap-2 mt-2 text-xs">
+                        <div class="flex-1 bg-white bg-opacity-20 rounded px-2 py-1">
+                            <span>Ахлах:</span>
+                            <span class="font-bold">{{ instructor.stats.total_lead }}</span>
+                        </div>
+                        <div class="flex-1 bg-white bg-opacity-20 rounded px-2 py-1">
+                            <span>Туслах:</span>
+                            <span class="font-bold">{{ instructor.stats.total_assistant }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-2 mt-4 pt-4 border-t">
+            <a href="{% url 'instructor_edit' instructor.pk %}" 
+               class="flex-1 px-4 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-100 transition-colors duration-200 text-center">
+                <i class="fas fa-edit mr-1"></i> Засах
+            </a>
+            <button onclick="confirmDelete({{ instructor.pk }}, '{{ instructor }}')"
+                    class="flex-1 px-4 py-2 bg-red-50 text-red-600 text-sm font-medium rounded-lg hover:bg-red-100 transition-colors duration-200">
+                <i class="fas fa-trash mr-1"></i> Устгах
+            </button>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-span-full text-center py-12 bg-white rounded-xl shadow-lg">
+        <i class="fas fa-chalkboard-teacher text-6xl text-gray-300 mb-4"></i>
+        <p class="text-gray-500">Багш байхгүй байна</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md mx-4">
+        <div class="flex items-center mb-4">
+            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-gray-800">Багш устгах</h3>
+                <p class="text-sm text-gray-600">Энэ үйлдлийг буцаах боломжгүй!</p>
+            </div>
+        </div>
+        <p class="text-gray-700 mb-6">
+            <span id="instructorName" class="font-semibold"></span>-г устгахдаа итгэлтэй байна уу?
+        </p>
+        <div class="flex gap-3">
+            <button onclick="closeDeleteModal()" 
+                    class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors">
+                Цуцлах
+            </button>
+            <form id="deleteForm" method="post" class="flex-1">
+                {% csrf_token %}
+                <button type="submit" 
+                        class="w-full px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors">
+                    Устгах
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Sort functionality
+    function updateSort(sortValue) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('sort', sortValue);
+        window.location.href = url.toString();
+    }
+    
+    // Toggle inactive instructors
+    function toggleInactive(showInactive) {
+        const url = new URL(window.location.href);
+        if (showInactive) {
+            url.searchParams.set('show_inactive', 'true');
+        } else {
+            url.searchParams.delete('show_inactive');
+        }
+        window.location.href = url.toString();
+    }
+
+    function confirmDelete(instructorId, instructorName) {
+        document.getElementById('instructorName').textContent = instructorName;
+        document.getElementById('deleteForm').action = `/instructors/${instructorId}/delete/`;
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').classList.add('hidden');
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('deleteModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeDeleteModal();
+        }
+    });
+</script>
+{% endblock %}

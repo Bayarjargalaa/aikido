@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Айкидо Сургалт{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1e40af',
+                        secondary: '#7c3aed',
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <!-- Mobile Menu Button -->
+    <button id="mobile-menu-button" class="fixed top-4 left-4 z-50 lg:hidden p-2 bg-blue-900 text-white rounded-lg shadow-lg hover:bg-blue-800 transition-all">
+        <i class="fas fa-bars text-xl"></i>
+    </button>
+
+    <!-- Mobile Overlay -->
+    <div id="mobile-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"></div>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="fixed top-0 left-0 z-40 w-64 h-screen transition-transform -translate-x-full lg:translate-x-0 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl">
+        <!-- Close button for mobile -->
+        <button id="close-sidebar" class="absolute top-4 right-4 lg:hidden text-white hover:text-gray-300">
+            <i class="fas fa-times text-xl"></i>
+        </button>
+        
+        <div class="h-full px-3 py-6 overflow-y-auto">
+            <!-- Logo -->
+            <div class="flex items-center justify-center mb-8 pb-6 border-b border-blue-700">
+                <div class="text-center">
+                    <div class="w-16 h-16 mx-auto mb-3 bg-white rounded-full flex items-center justify-center shadow-lg">
+                        <i class="fas fa-hand-rock text-3xl text-blue-900"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">Айкидо</h2>
+                    <p class="text-xs text-blue-200">Сургалтын систем</p>
+                </div>
+            </div>
+            
+            <!-- Navigation -->
+            <ul class="space-y-2 font-medium">
+                <li>
+                    <a href="{% url 'dashboard' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'dashboard' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-chart-line w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Хяналтын самбар</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'student_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'student_list' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-user-graduate w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Сурагчид</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'instructor_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'instructor_list' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-chalkboard-teacher w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Багш нар</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'class_schedule' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'class_schedule' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-calendar-alt w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Хичээлийн хуваарь</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'attendance_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'attendance_list' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-clipboard-check w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Ирц</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'attendance_record' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'attendance_record' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-user-check w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Ирц бүртгэх</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'payment_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'payment_list' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-money-bill-wave w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Төлбөр</span>
+                    </a>
+                </li>
+            </ul>
+
+            <!-- Admin Link -->
+            <div class="mt-8 pt-6 border-t border-blue-700">
+                <a href="/admin/" class="flex items-center p-3 text-blue-200 rounded-lg hover:bg-blue-700 hover:text-white group transition-all duration-200">
+                    <i class="fas fa-cog w-5 h-5"></i>
+                    <span class="ml-3">Админ хэсэг</span>
+                </a>
+                <a href="{% url 'logout' %}" class="flex items-center p-3 text-blue-200 rounded-lg hover:bg-red-600 hover:text-white group transition-all duration-200 mt-2">
+                    <i class="fas fa-sign-out-alt w-5 h-5"></i>
+                    <span class="ml-3">Гарах</span>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="p-4 lg:ml-64">
+        <!-- Top Navigation Bar -->
+        <nav class="bg-white shadow-sm rounded-lg mb-6 px-4 lg:px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="ml-12 lg:ml-0">
+                    <h1 class="text-xl lg:text-2xl font-bold text-gray-800">{% block page_title %}Dashboard{% endblock %}</h1>
+                    <p class="text-xs lg:text-sm text-gray-500">{% block page_subtitle %}Системийн ерөнхий мэдээлэл{% endblock %}</p>
+                </div>
+                <div class="flex items-center space-x-2 lg:space-x-4">
+                    <button class="hidden sm:block relative p-2 text-gray-600 hover:bg-gray-100 rounded-full">
+                        <i class="fas fa-bell text-xl"></i>
+                        <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                    </button>
+                    <div class="flex items-center space-x-2 lg:space-x-3">
+                        <div class="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold text-sm">{{ request.user.username|slice:":1"|upper }}</span>
+                        </div>
+                        <div class="hidden sm:block">
+                            <p class="text-sm font-semibold text-gray-700">{{ request.user.username }}</p>
+                            <p class="text-xs text-gray-500">Админ</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Content -->
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Mobile Menu Script -->
+    <script>
+        const sidebar = document.getElementById('sidebar');
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const closeSidebar = document.getElementById('close-sidebar');
+        const mobileOverlay = document.getElementById('mobile-overlay');
+
+        function openSidebar() {
+            sidebar.classList.remove('-translate-x-full');
+            mobileOverlay.classList.remove('hidden');
+        }
+
+        function closeSidebarFunc() {
+            sidebar.classList.add('-translate-x-full');
+            mobileOverlay.classList.add('hidden');
+        }
+
+        mobileMenuButton.addEventListener('click', openSidebar);
+        closeSidebar.addEventListener('click', closeSidebarFunc);
+        mobileOverlay.addEventListener('click', closeSidebarFunc);
+
+        // Close sidebar when clicking a menu item on mobile
+        const menuItems = sidebar.querySelectorAll('a');
+        menuItems.forEach(item => {
+            item.addEventListener('click', () => {
+                if (window.innerWidth < 1024) {
+                    closeSidebarFunc();
+                }
+            });
+        });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

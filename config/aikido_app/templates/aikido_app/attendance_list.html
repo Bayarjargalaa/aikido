@@ -1,0 +1,58 @@
+{% extends 'aikido_app/base.html' %}
+
+{% block title %}Ирц - Айкидо Сургалт{% endblock %}
+{% block page_title %}Ирц бүртгэл{% endblock %}
+{% block page_subtitle %}Сурагчдын ирцийн бүртгэл{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-xl shadow-lg p-4 lg:p-6">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b-2 border-gray-200">
+                    <th class="text-left py-3 px-2 lg:py-4 lg:px-4 font-semibold text-gray-700">Сурагч</th>
+                    <th class="text-left py-3 px-2 lg:py-4 lg:px-4 font-semibold text-gray-700">Хичээл</th>
+                    <th class="text-left py-3 px-2 lg:py-4 lg:px-4 font-semibold text-gray-700">Огноо</th>
+                    <th class="text-center py-3 px-2 lg:py-4 lg:px-4 font-semibold text-gray-700">Статус</th>
+                    <th class="text-left py-3 px-2 lg:py-4 lg:px-4 font-semibold text-gray-700">Багш</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for attendance in attendances %}
+                <tr class="hover:bg-gray-50">
+                    <td class="py-3 px-2 lg:py-4 lg:px-4">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mr-2 lg:mr-3">
+                                <span class="text-white font-bold text-xs lg:text-sm">{{ attendance.student.first_name|slice:":1" }}</span>
+                            </div>
+                            <span class="font-medium text-gray-800 text-xs lg:text-base">{{ attendance.student }}</span>
+                        </div>
+                    </td>
+                    <td class="py-3 px-2 lg:py-4 lg:px-4 text-gray-600">{{ attendance.session.class_type }}</td>
+                    <td class="py-3 px-2 lg:py-4 lg:px-4 text-gray-600">{{ attendance.session.date|date:"Y-m-d" }}</td>
+                    <td class="py-3 px-2 lg:py-4 lg:px-4 text-center">
+                        {% if attendance.is_present %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-medium">
+                            <i class="fas fa-check mr-1"></i><span class="hidden sm:inline">Ирсэн</span>
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full bg-red-100 text-red-800 text-xs font-medium">
+                            <i class="fas fa-times mr-1"></i><span class="hidden sm:inline">Тасалсан</span>
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="py-4 px-4 text-gray-600">{{ attendance.recorded_by }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="py-12 text-center text-gray-500">
+                        <i class="fas fa-clipboard-list text-4xl mb-2"></i>
+                        <p>Ирцийн бүртгэл байхгүй байна</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
