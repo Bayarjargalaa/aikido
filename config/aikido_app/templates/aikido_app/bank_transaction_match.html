@@ -69,7 +69,7 @@
     {% if is_income and allocations %}
     <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h2 class="text-xl font-bold text-gray-800 mb-4">
-            <i class="fas fa-list mr-2 text-green-600"></i>Одоо байгаа орлогын хуваарилалт
+            <i class="fas fa-list mr-2 text-green-600"></i>Одоо байгаа сурагчдын төлбөрийн хуваарилалт
         </h2>
         <div class="space-y-3">
             {% for allocation in allocations %}
@@ -81,17 +81,128 @@
                         <p class="text-sm text-gray-600">{{ allocation.payment_month|date:"Y оны m сар" }}</p>
                     </div>
                 </div>
-                <div class="text-right">
-                    <p class="text-2xl font-bold text-green-600">{{ allocation.amount|floatformat:0 }}₮</p>
-                    {% if allocation.notes %}
-                    <p class="text-xs text-gray-500">{{ allocation.notes }}</p>
-                    {% endif %}
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p class="text-2xl font-bold text-green-600">{{ allocation.amount|floatformat:0 }}₮</p>
+                        {% if allocation.notes %}
+                        <p class="text-xs text-gray-500">{{ allocation.notes }}</p>
+                        {% endif %}
+                    </div>
+                    <a href="{% url 'delete_payment_allocation' allocation.id %}" 
+                       onclick="return confirm('Энэ хуваарилалтыг устгах уу?');"
+                       class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                        <i class="fas fa-trash"></i>
+                    </a>
                 </div>
             </div>
             {% endfor %}
         </div>
     </div>
-    {% elif is_expense and expense_allocations %}
+    {% endif %}
+
+    {% if is_income and income_allocations %}
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-list mr-2 text-purple-600"></i>Одоо байгаа бусад орлогын хуваарилалт
+        </h2>
+        <div class="space-y-3">
+            {% for allocation in income_allocations %}
+            <div class="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <div class="flex items-center gap-4">
+                    <i class="fas fa-hand-holding-usd text-purple-600 text-2xl"></i>
+                    <div>
+                        <p class="font-semibold text-gray-800">{{ allocation.income_category.name }}</p>
+                        <p class="text-sm text-gray-600">{{ allocation.income_date|date:"Y-m-d" }}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p class="text-2xl font-bold text-purple-600">{{ allocation.amount|floatformat:0 }}₮</p>
+                        {% if allocation.notes %}
+                        <p class="text-xs text-gray-500">{{ allocation.notes }}</p>
+                        {% endif %}
+                    </div>
+                    <a href="{% url 'delete_income_allocation' allocation.id %}" 
+                       onclick="return confirm('Энэ хуваарилалтыг устгах уу?');"
+                       class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                        <i class="fas fa-trash"></i>
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if is_income and seminar_allocations %}
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-list mr-2 text-orange-600"></i>Одоо байгаа семинарын төлбөр
+        </h2>
+        <div class="space-y-3">
+            {% for allocation in seminar_allocations %}
+            <div class="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <div class="flex items-center gap-4">
+                    <i class="fas fa-chalkboard-teacher text-orange-600 text-2xl"></i>
+                    <div>
+                        <p class="font-semibold text-gray-800">{{ allocation.student }} - {{ allocation.seminar.name }}</p>
+                        <p class="text-sm text-gray-600">{{ allocation.seminar.seminar_date|date:"Y-m-d" }}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p class="text-2xl font-bold text-orange-600">{{ allocation.amount|floatformat:0 }}₮</p>
+                        {% if allocation.notes %}
+                        <p class="text-xs text-gray-500">{{ allocation.notes }}</p>
+                        {% endif %}
+                    </div>
+                    <a href="#" 
+                       onclick="return confirm('Энэ хуваарилалтыг устгах уу?');"
+                       class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                        <i class="fas fa-trash"></i>
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if is_income and membership_allocations %}
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-list mr-2 text-green-600"></i>Одоо байгаа гишүүнчлэлийн төлбөр
+        </h2>
+        <div class="space-y-3">
+            {% for allocation in membership_allocations %}
+            <div class="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
+                <div class="flex items-center gap-4">
+                    <i class="fas fa-id-card text-green-600 text-2xl"></i>
+                    <div>
+                        <p class="font-semibold text-gray-800">{{ allocation.student }}</p>
+                        <p class="text-sm text-gray-600">{{ allocation.payment_month|date:"Y оны m сар" }}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p class="text-2xl font-bold text-green-600">{{ allocation.amount|floatformat:0 }}₮</p>
+                        {% if allocation.notes %}
+                        <p class="text-xs text-gray-500">{{ allocation.notes }}</p>
+                        {% endif %}
+                    </div>
+                    <a href="#" 
+                       onclick="return confirm('Энэ хуваарилалтыг устгах уу?');"
+                       class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                        <i class="fas fa-trash"></i>
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if is_expense and expense_allocations %}
     <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h2 class="text-xl font-bold text-gray-800 mb-4">
             <i class="fas fa-list mr-2 text-red-600"></i>Одоо байгаа зардлын хуваарилалт
@@ -106,11 +217,18 @@
                         <p class="text-sm text-gray-600">{{ allocation.expense_date|date:"Y-m-d" }}</p>
                     </div>
                 </div>
-                <div class="text-right">
-                    <p class="text-2xl font-bold text-red-600">{{ allocation.amount|floatformat:0 }}₮</p>
-                    {% if allocation.notes %}
-                    <p class="text-xs text-gray-500">{{ allocation.notes }}</p>
-                    {% endif %}
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p class="text-2xl font-bold text-red-600">{{ allocation.amount|floatformat:0 }}₮</p>
+                        {% if allocation.notes %}
+                        <p class="text-xs text-gray-500">{{ allocation.notes }}</p>
+                        {% endif %}
+                    </div>
+                    <a href="{% url 'delete_expense_allocation' allocation.id %}" 
+                       onclick="return confirm('Энэ хуваарилалтыг устгах уу?');"
+                       class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                        <i class="fas fa-trash"></i>
+                    </a>
                 </div>
             </div>
             {% endfor %}
@@ -129,6 +247,37 @@
             {% csrf_token %}
             
             {% if is_income %}
+            <!-- Income Type Selection -->
+            <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <label class="block text-sm font-medium text-gray-700 mb-3">
+                    <i class="fas fa-list-ul mr-1"></i>Орлогын төрөл сонгох
+                </label>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <label class="flex items-center">
+                        <input type="radio" name="income_type" value="student_payment" checked
+                               class="mr-2" onchange="toggleIncomeForm()">
+                        <span class="text-sm font-medium">Сургалтын төлбөр</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="income_type" value="seminar_payment"
+                               class="mr-2" onchange="toggleIncomeForm()">
+                        <span class="text-sm font-medium">Семинарын төлбөр</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="income_type" value="membership_payment"
+                               class="mr-2" onchange="toggleIncomeForm()">
+                        <span class="text-sm font-medium">Гишүүнчлэлийн төлбөр</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="income_type" value="other_income"
+                               class="mr-2" onchange="toggleIncomeForm()">
+                        <span class="text-sm font-medium">Бусад орлого</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Student Payment Form (default visible) -->
+            <div id="student-payment-form">
             <!-- Income (Payment) Allocation Form -->
             <div id="allocation-rows" class="space-y-4 mb-6">
                 <!-- Initial row -->
@@ -223,6 +372,196 @@
                     </div>
                 </div>
             </div>
+            </div>
+            <!-- End Student Payment Form -->
+
+            <!-- Other Income Form (hidden by default) -->
+            <div id="other-income-form" style="display: none;">
+                <div id="income-allocation-rows" class="space-y-4 mb-6">
+                    <!-- Initial row -->
+                    <div class="income-row grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-tag mr-1"></i>Орлогын төрөл
+                            </label>
+                            <select name="income_category[]" disabled
+                                    class="category-select w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <option value="">-- Одоо байгаа төрөл --</option>
+                                {% for category in income_categories %}
+                                <option value="{{ category.id }}">{{ category.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <input type="text" name="new_income_category[]" disabled
+                                   class="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                   placeholder="Эсвэл шинэ төрөл үүсгэх...">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-calendar mr-1"></i>Огноо
+                            </label>
+                            <input type="date" name="income_date[]" disabled value="{{ transaction.transaction_date|date:'Y-m-d' }}"
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-money-bill mr-1"></i>Дүн (₮)
+                            </label>
+                            <input type="number" name="amount[]" step="0.01" disabled
+                                   class="amount-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                   placeholder="0">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="button" onclick="removeIncomeRow(this)" 
+                                    class="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="md:col-span-5">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-comment mr-1"></i>Тайлбар (заавал биш)
+                            </label>
+                            <input type="text" name="notes[]" disabled
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                   placeholder="Тайлбар бичих...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Row Button for Other Income -->
+                <button type="button" onclick="addIncomeRow()" 
+                        class="w-full py-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 border-2 border-dashed border-purple-300 mb-6">
+                    <i class="fas fa-plus-circle mr-2"></i>Мөр нэмэх
+                </button>
+            </div>
+            <!-- End Other Income Form -->
+
+            <!-- Seminar Payment Form (hidden by default) -->
+            <div id="seminar-payment-form" style="display: none;">
+                <div id="seminar-allocation-rows" class="space-y-4 mb-6">
+                    <!-- Initial row -->
+                    <div class="seminar-row grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-user mr-1"></i>Сурагч
+                            </label>
+                            <select name="seminar_student_id[]" disabled
+                                    class="seminar-student-select w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                                <option value="">-- Сонгох --</option>
+                                {% for student in students %}
+                                <option value="{{ student.id }}">
+                                    {{ student.last_name }} {{ student.first_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-chalkboard-teacher mr-1"></i>Семинар
+                            </label>
+                            <select name="seminar_id[]" disabled
+                                    class="seminar-select w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                                <option value="">-- Сонгох --</option>
+                                {% for seminar in seminars %}
+                                <option value="{{ seminar.id }}" data-fee="{{ seminar.fee }}">
+                                    {{ seminar.name }} ({{ seminar.seminar_date|date:"Y-m-d" }})
+                                    {% if seminar.fee %}
+                                    - {{ seminar.fee|floatformat:0 }}₮
+                                    {% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-money-bill mr-1"></i>Дүн (₮)
+                            </label>
+                            <input type="number" name="amount[]" step="0.01" disabled
+                                   class="amount-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                                   placeholder="0">
+                        </div>
+                        <div class="md:col-span-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-comment mr-1"></i>Тайлбар (заавал биш)
+                            </label>
+                            <input type="text" name="notes[]" disabled
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                                   placeholder="Тайлбар бичих...">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="button" onclick="removeSeminarRow(this)" 
+                                    class="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Row Button for Seminar -->
+                <button type="button" onclick="addSeminarRow()" 
+                        class="w-full py-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 border-2 border-dashed border-orange-300 mb-6">
+                    <i class="fas fa-plus-circle mr-2"></i>Мөр нэмэх
+                </button>
+            </div>
+            <!-- End Seminar Payment Form -->
+
+            <!-- Membership Payment Form (hidden by default) -->
+            <div id="membership-payment-form" style="display: none;">
+                <div id="membership-allocation-rows" class="space-y-4 mb-6">
+                    <!-- Initial row -->
+                    <div class="membership-row grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-user mr-1"></i>Сурагч
+                            </label>
+                            <select name="membership_student_id[]" disabled
+                                    class="membership-student-select w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                <option value="">-- Сонгох --</option>
+                                {% for student in students %}
+                                <option value="{{ student.id }}">
+                                    {{ student.last_name }} {{ student.first_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-calendar mr-1"></i>Сар
+                            </label>
+                            <input type="month" name="membership_month[]" disabled
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-money-bill mr-1"></i>Дүн (₮)
+                            </label>
+                            <input type="number" name="amount[]" step="0.01" disabled
+                                   class="amount-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                                   placeholder="0">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="button" onclick="removeMembershipRow(this)" 
+                                    class="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="md:col-span-5">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-comment mr-1"></i>Тайлбар (заавал биш)
+                            </label>
+                            <input type="text" name="notes[]" disabled
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                                   placeholder="Тайлбар бичих...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Row Button for Membership -->
+                <button type="button" onclick="addMembershipRow()" 
+                        class="w-full py-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 border-2 border-dashed border-green-300 mb-6">
+                    <i class="fas fa-plus-circle mr-2"></i>Мөр нэмэх
+                </button>
+            </div>
+            <!-- End Membership Payment Form -->
             
             {% elif is_expense %}
             <!-- Expense Allocation Form -->
@@ -470,5 +809,168 @@ function removeExpenseRow(button) {
         alert('Хамгийн багадаа 1 мөр байх ёстой');
     }
 }
+
+// Toggle between payment types
+function toggleIncomeForm() {
+    const incomeType = document.querySelector('input[name="income_type"]:checked').value;
+    const studentForm = document.getElementById('student-payment-form');
+    const seminarForm = document.getElementById('seminar-payment-form');
+    const membershipForm = document.getElementById('membership-payment-form');
+    const otherIncomeForm = document.getElementById('other-income-form');
+    
+    // Hide all forms
+    studentForm.style.display = 'none';
+    seminarForm.style.display = 'none';
+    membershipForm.style.display = 'none';
+    otherIncomeForm.style.display = 'none';
+    
+    // Disable all fields
+    [studentForm, seminarForm, membershipForm, otherIncomeForm].forEach(form => {
+        form.querySelectorAll('input, select').forEach(el => {
+            el.disabled = true;
+            el.required = false;
+        });
+    });
+    
+    // Show and enable selected form
+    if (incomeType === 'student_payment') {
+        studentForm.style.display = 'block';
+        studentForm.querySelectorAll('input, select').forEach(el => {
+            el.disabled = false;
+            if (el.name === 'student_id[]' || el.name === 'payment_month[]' || el.name === 'amount[]') {
+                el.required = true;
+            }
+        });
+    } else if (incomeType === 'seminar_payment') {
+        seminarForm.style.display = 'block';
+        seminarForm.querySelectorAll('input, select').forEach(el => {
+            el.disabled = false;
+            if (el.name === 'seminar_student_id[]' || el.name === 'seminar_id[]' || el.name === 'amount[]') {
+                el.required = true;
+            }
+        });
+    } else if (incomeType === 'membership_payment') {
+        membershipForm.style.display = 'block';
+        membershipForm.querySelectorAll('input, select').forEach(el => {
+            el.disabled = false;
+            if (el.name === 'membership_student_id[]' || el.name === 'membership_month[]' || el.name === 'amount[]') {
+                el.required = true;
+            }
+        });
+    } else if (incomeType === 'other_income') {
+        otherIncomeForm.style.display = 'block';
+        otherIncomeForm.querySelectorAll('input, select').forEach(el => {
+            el.disabled = false;
+            if (el.name === 'income_date[]' || el.name === 'amount[]') {
+                el.required = true;
+            }
+        });
+    }
+}
+
+// Other income allocation functions
+function addIncomeRow() {
+    const container = document.getElementById('income-allocation-rows');
+    const firstRow = container.querySelector('.income-row');
+    const newRow = firstRow.cloneNode(true);
+    
+    // Clear values
+    newRow.querySelectorAll('input, select').forEach(input => {
+        if (input.type === 'number') {
+            input.value = '';
+        } else if (input.type === 'text') {
+            input.value = '';
+        } else if (input.tagName === 'SELECT') {
+            input.selectedIndex = 0;
+        } else if (input.type === 'date') {
+            // Keep default date
+        }
+    });
+    
+    container.appendChild(newRow);
+}
+
+function removeIncomeRow(button) {
+    const container = document.getElementById('income-allocation-rows');
+    if (container.querySelectorAll('.income-row').length > 1) {
+        button.closest('.income-row').remove();
+    } else {
+        alert('Хамгийн багадаа 1 мөр байх ёстой');
+    }
+}
+
+// Seminar payment functions
+function addSeminarRow() {
+    const container = document.getElementById('seminar-allocation-rows');
+    const firstRow = container.querySelector('.seminar-row');
+    const newRow = firstRow.cloneNode(true);
+    
+    newRow.querySelectorAll('input, select').forEach(input => {
+        if (input.type === 'number') {
+            input.value = '';
+        } else if (input.type === 'text') {
+            input.value = '';
+        } else if (input.tagName === 'SELECT') {
+            input.selectedIndex = 0;
+        }
+    });
+    
+    container.appendChild(newRow);
+}
+
+function removeSeminarRow(button) {
+    const container = document.getElementById('seminar-allocation-rows');
+    if (container.querySelectorAll('.seminar-row').length > 1) {
+        button.closest('.seminar-row').remove();
+    } else {
+        alert('Хамгийн багадаа 1 мөр байх ёстой');
+    }
+}
+
+// Membership payment functions
+function addMembershipRow() {
+    const container = document.getElementById('membership-allocation-rows');
+    const firstRow = container.querySelector('.membership-row');
+    const newRow = firstRow.cloneNode(true);
+    
+    newRow.querySelectorAll('input, select').forEach(input => {
+        if (input.type === 'number') {
+            input.value = '';
+        } else if (input.type === 'text') {
+            input.value = '';
+        } else if (input.type === 'month') {
+            input.value = '';
+        } else if (input.tagName === 'SELECT') {
+            input.selectedIndex = 0;
+        }
+    });
+    
+    container.appendChild(newRow);
+}
+
+function removeMembershipRow(button) {
+    const container = document.getElementById('membership-allocation-rows');
+    if (container.querySelectorAll('.membership-row').length > 1) {
+        button.closest('.membership-row').remove();
+    } else {
+        alert('Хамгийн багадаа 1 мөр байх ёстой');
+    }
+}
+
+// Auto-fill seminar fee when seminar selected
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('seminar-select')) {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const fee = selectedOption.dataset.fee;
+        if (fee) {
+            const row = e.target.closest('.seminar-row');
+            const amountInput = row.querySelector('.amount-input');
+            if (!amountInput.value) {
+                amountInput.value = fee;
+            }
+        }
+    }
+});
+
 </script>
 {% endblock %}

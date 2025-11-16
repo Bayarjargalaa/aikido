@@ -92,6 +92,24 @@
                     </a>
                 </li>
                 <li>
+                    <a href="{% url 'seminar_payment_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'seminar_payment_list' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-graduation-cap w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Семинарын төлбөр</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'membership_payment_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'membership_payment_list' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-id-card w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Гишүүнчлэлийн төлбөр</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'income_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'income_list' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-hand-holding-usd w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Бусад орлого</span>
+                    </a>
+                </li>
+                <li>
                     <a href="{% url 'bank_transaction_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if 'bank_transaction' in request.resolver_match.url_name %}bg-blue-700{% endif %}">
                         <i class="fas fa-university w-5 h-5 text-blue-200 group-hover:text-white"></i>
                         <span class="ml-3">Банкны гүйлгээ</span>

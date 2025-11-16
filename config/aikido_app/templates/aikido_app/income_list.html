@@ -1,0 +1,219 @@
+{% extends 'aikido_app/base.html' %}
+
+{% block title %}Бусад орлого - Айкидо Сургалт{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header with Summary -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">
+            <i class="fas fa-hand-holding-usd mr-2 text-blue-600"></i>Бусад орлого
+        </h1>
+        <p class="text-gray-600">Семинар, гишүүнчлэл болон бусад орлого</p>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-blue-100 text-sm mb-1">Нийт орлого</p>
+                    <p class="text-3xl font-bold">{{ summary.total_count|default:0 }}</p>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-full p-4">
+                    <i class="fas fa-receipt text-2xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-green-100 text-sm mb-1">Нийт дүн</p>
+                    <p class="text-3xl font-bold">{{ summary.total_amount|floatformat:0|default:"0" }}₮</p>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-full p-4">
+                    <i class="fas fa-coins text-2xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-purple-100 text-sm mb-1">Дундаж</p>
+                    <p class="text-3xl font-bold">
+                        {% if summary.total_count > 0 %}
+                        {% widthratio summary.total_amount summary.total_count 1 %}₮
+                        {% else %}
+                        0₮
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-full p-4">
+                    <i class="fas fa-chart-line text-2xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Summary -->
+    {% if category_summary %}
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-chart-pie mr-2"></i>Ангилал бүрээр
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {% for cat in category_summary %}
+            <div class="p-4 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg border border-indigo-200">
+                <p class="text-sm text-gray-600 mb-1">{{ cat.income_category__name }}</p>
+                <p class="text-2xl font-bold text-indigo-600">{{ cat.total|floatformat:0 }}₮</p>
+                <p class="text-xs text-gray-500">{{ cat.count }} гүйлгээ</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-calendar mr-1"></i>Сар
+                </label>
+                <select name="month" onchange="this.form.submit()"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">Бүгд</option>
+                    {% for month in months %}
+                    <option value="{{ month|date:'Y-m' }}" {% if selected_month == month|date:'Y-m' %}selected{% endif %}>
+                        {{ month|date:"Y оны m сар" }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-tags mr-1"></i>Ангилал
+                </label>
+                <select name="category" onchange="this.form.submit()"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">Бүгд</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" {% if selected_category == category.id|stringformat:"s" %}selected{% endif %}>
+                        {{ category.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="flex gap-2">
+                {% if selected_month or selected_category %}
+                <a href="{% url 'income_list' %}" 
+                   class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 flex items-center">
+                    <i class="fas fa-times mr-2"></i>Цэвэрлэх
+                </a>
+                {% endif %}
+            </div>
+            
+            <div class="text-right">
+                <a href="{% url 'bank_transaction_list' %}" 
+                   class="inline-flex items-center px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    <i class="fas fa-university mr-2"></i>Банкны гүйлгээ
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Income Table -->
+    {% if allocations %}
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                    <tr>
+                        <th class="py-4 px-6 text-left font-semibold">Ангилал</th>
+                        <th class="py-4 px-6 text-center font-semibold">Огноо</th>
+                        <th class="py-4 px-6 text-right font-semibold">Дүн</th>
+                        <th class="py-4 px-6 text-center font-semibold">Гүйлгээ</th>
+                        <th class="py-4 px-6 text-left font-semibold">Тэмдэглэл</th>
+                        <th class="py-4 px-6 text-center font-semibold">Бүртгэсэн</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for allocation in allocations %}
+                    <tr class="hover:bg-blue-50 transition-colors">
+                        <td class="py-4 px-6">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center mr-3">
+                                    <i class="fas fa-tag text-white"></i>
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-gray-800">{{ allocation.income_category.name }}</p>
+                                    <p class="text-xs text-gray-500">{{ allocation.income_category.get_category_type_display }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-4 px-6 text-center">
+                            <span class="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full font-semibold text-sm">
+                                {{ allocation.income_date|date:"Y-m-d" }}
+                            </span>
+                        </td>
+                        <td class="py-4 px-6 text-right">
+                            <span class="text-2xl font-bold text-green-600">
+                                {{ allocation.amount|floatformat:0 }}₮
+                            </span>
+                        </td>
+                        <td class="py-4 px-6">
+                            <div class="text-sm">
+                                <p class="text-gray-700 font-medium truncate max-w-xs" title="{{ allocation.bank_transaction.description }}">
+                                    {{ allocation.bank_transaction.description|truncatewords:8 }}
+                                </p>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    {{ allocation.bank_transaction.transaction_date|date:"Y-m-d" }}
+                                </p>
+                            </div>
+                        </td>
+                        <td class="py-4 px-6">
+                            {% if allocation.notes %}
+                            <span class="text-sm text-gray-600">{{ allocation.notes }}</span>
+                            {% else %}
+                            <span class="text-gray-400 text-sm">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-6 text-center">
+                            <div class="text-sm text-gray-600">
+                                {% if allocation.created_by %}
+                                <p class="font-medium">{{ allocation.created_by.first_name }}</p>
+                                {% endif %}
+                                <p class="text-xs text-gray-400">{{ allocation.created_at|date:"Y-m-d H:i" }}</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="py-16 text-center bg-white rounded-lg shadow-lg">
+        <div class="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-hand-holding-usd text-4xl text-gray-400"></i>
+        </div>
+        <h3 class="text-xl font-bold text-gray-700 mb-2">Орлого олдсонгүй</h3>
+        <p class="text-gray-500 mb-6">
+            {% if selected_month or selected_category %}
+            Шүүлтэд тохирох орлого байхгүй байна
+            {% else %}
+            Банкны гүйлгээг орлогын ангилалтай холбоно уу
+            {% endif %}
+        </p>
+        <a href="{% url 'bank_transaction_list' %}" 
+           class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700">
+            <i class="fas fa-university mr-2"></i>Банкны гүйлгээ руу очих
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

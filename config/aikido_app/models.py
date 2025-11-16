@@ -565,9 +565,13 @@ class BankTransaction(models.Model):
     
     def get_allocated_amount(self):
         """Хуваарилагдсан нийт дүн (орлого эсвэл зардал)"""
-        # Кредит гүйлгээ бол PaymentAllocation-оос
+        # Кредит гүйлгээ бол PaymentAllocation болон IncomeAllocation-оос
         if self.credit_amount and self.credit_amount > 0:
-            return self.allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+            payment_total = self.allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+            income_total = self.income_allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+            seminar_total = self.seminar_allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+            membership_total = self.membership_allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+            return payment_total + income_total + seminar_total + membership_total
         # Дебит гүйлгээ бол ExpenseAllocation-оос
         elif self.debit_amount and self.debit_amount != 0:
             return self.expense_allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
@@ -628,6 +632,212 @@ class PaymentAllocation(models.Model):
         verbose_name = "Төлбөрийн хуваарилалт"
         verbose_name_plural = "Төлбөрийн хуваарилалтууд"
         ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.student} - {self.payment_month.strftime('%Y-%m')} - {self.amount}₮"
+
+
+class IncomeCategory(models.Model):
+    """Орлогын төрөл/ангилал (сарын төлбөрөөс бусад орлого)"""
+    
+    CATEGORY_CHOICES = [
+        ('SEMINAR', 'Семинарын хураамж'),
+        ('MEMBERSHIP', 'Гишүүнчлэлийн хураамж'),
+        ('EXAM', 'Шалгалтын хураамж'),
+        ('EVENT', 'Арга хэмжээний орлого'),
+        ('MERCHANDISE', 'Бараа борлуулалт'),
+        ('OTHER', 'Бусад орлого'),
+    ]
+    
+    name = models.CharField(
+        max_length=200,
+        unique=True,
+        verbose_name="Нэр"
+    )
+    category_type = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default='OTHER',
+        verbose_name="Төрөл"
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name="Тайлбар"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    
+    class Meta:
+        verbose_name = "Орлогын ангилал"
+        verbose_name_plural = "Орлогын ангиллууд"
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.name
+
+
+class IncomeAllocation(models.Model):
+    """Орлогын хуваарилалт - Банкны гүйлгээг орлогын ангилалтай холбох"""
+    
+    bank_transaction = models.ForeignKey(
+        BankTransaction,
+        on_delete=models.CASCADE,
+        related_name='income_allocations',
+        verbose_name="Банкны гүйлгээ"
+    )
+    income_category = models.ForeignKey(
+        IncomeCategory,
+        on_delete=models.PROTECT,
+        verbose_name="Орлогын ангилал"
+    )
+    income_date = models.DateField(verbose_name="Орлогын огноо")
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name="Дүн"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Тэмдэглэл"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    created_by = models.ForeignKey(
+        Instructor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Үүсгэсэн хэрэглэгч"
+    )
+    
+    class Meta:
+        verbose_name = "Орлогын хуваарилалт"
+        verbose_name_plural = "Орлогын хуваарилалтууд"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.income_category} - {self.income_date} - {self.amount}₮"
+
+
+class Seminar(models.Model):
+    """Семинар/Арга хэмжээ"""
+    
+    name = models.CharField(
+        max_length=200,
+        verbose_name="Нэр"
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name="Тайлбар"
+    )
+    seminar_date = models.DateField(verbose_name="Семинарын огноо")
+    fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="Төлбөр",
+        help_text="Нэг хүний төлбөр"
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Идэвхтэй эсэх")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    
+    class Meta:
+        verbose_name = "Семинар"
+        verbose_name_plural = "Семинарууд"
+        ordering = ['-seminar_date']
+    
+    def __str__(self):
+        return f"{self.name} ({self.seminar_date})"
+
+
+class SeminarPaymentAllocation(models.Model):
+    """Семинарын төлбөрийн хуваарилалт - Банкны гүйлгээг сурагч + семинартай холбох"""
+    
+    bank_transaction = models.ForeignKey(
+        BankTransaction,
+        on_delete=models.CASCADE,
+        related_name='seminar_allocations',
+        verbose_name="Банкны гүйлгээ"
+    )
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        verbose_name="Сурагч"
+    )
+    seminar = models.ForeignKey(
+        Seminar,
+        on_delete=models.PROTECT,
+        verbose_name="Семинар"
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name="Төлсөн дүн"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Тэмдэглэл"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    created_by = models.ForeignKey(
+        Instructor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Үүсгэсэн хэрэглэгч"
+    )
+    
+    class Meta:
+        verbose_name = "Семинарын төлбөр"
+        verbose_name_plural = "Семинарын төлбөрүүд"
+        ordering = ['-created_at']
+        unique_together = ['student', 'seminar']  # Нэг семинарт нэг удаа төлнө
+    
+    def __str__(self):
+        return f"{self.student} - {self.seminar} - {self.amount}₮"
+
+
+class MembershipPaymentAllocation(models.Model):
+    """Гишүүнчлэлийн төлбөрийн хуваарилалт - Банкны гүйлгээг сурагч + сартай холбох"""
+    
+    bank_transaction = models.ForeignKey(
+        BankTransaction,
+        on_delete=models.CASCADE,
+        related_name='membership_allocations',
+        verbose_name="Банкны гүйлгээ"
+    )
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        verbose_name="Сурагч"
+    )
+    payment_month = models.DateField(
+        verbose_name="Төлбөрийн сар",
+        help_text="Аль сарын гишүүнчлэлийн төлбөр"
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name="Төлсөн дүн"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Тэмдэглэл"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    created_by = models.ForeignKey(
+        Instructor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Үүсгэсэн хэрэглэгч"
+    )
+    
+    class Meta:
+        verbose_name = "Гишүүнчлэлийн төлбөр"
+        verbose_name_plural = "Гишүүнчлэлийн төлбөрүүд"
+        ordering = ['-payment_month', '-created_at']
     
     def __str__(self):
         return f"{self.student} - {self.payment_month.strftime('%Y-%m')} - {self.amount}₮"

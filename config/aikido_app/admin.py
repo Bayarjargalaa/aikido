@@ -2,7 +2,8 @@ from django.contrib import admin
 from .models import (
     Student, Instructor, ClassType, ClassSession, InstructorAssignment, 
     Attendance, Payment, RankHistory, BankTransaction, PaymentAllocation,
-    ExpenseCategory, ExpenseAllocation
+    IncomeCategory, IncomeAllocation, ExpenseCategory, ExpenseAllocation,
+    Seminar, SeminarPaymentAllocation, MembershipPaymentAllocation
 )
 
 
@@ -220,6 +221,38 @@ class PaymentAllocationAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at']
 
 
+@admin.register(IncomeCategory)
+class IncomeCategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'category_type', 'description', 'created_at']
+    list_filter = ['category_type']
+    search_fields = ['name', 'description']
+    ordering = ['name']
+
+
+@admin.register(IncomeAllocation)
+class IncomeAllocationAdmin(admin.ModelAdmin):
+    list_display = ['bank_transaction', 'income_category', 'income_date', 'amount', 'created_at']
+    list_filter = ['income_category', 'income_date', 'created_at']
+    search_fields = ['income_category__name', 'bank_transaction__description', 'notes']
+    date_hierarchy = 'income_date'
+    ordering = ['-income_date', '-created_at']
+    
+    fieldsets = (
+        ('Банкны гүйлгээ', {
+            'fields': ('bank_transaction',)
+        }),
+        ('Орлогын мэдээлэл', {
+            'fields': ('income_category', 'income_date', 'amount', 'notes')
+        }),
+        ('Бусад', {
+            'fields': ('created_by', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['created_at']
+
+
 @admin.register(ExpenseCategory)
 class ExpenseCategoryAdmin(admin.ModelAdmin):
     list_display = ['name', 'description', 'created_at']
@@ -241,6 +274,72 @@ class ExpenseAllocationAdmin(admin.ModelAdmin):
         }),
         ('Зардлын мэдээлэл', {
             'fields': ('expense_category', 'expense_date', 'amount', 'notes')
+        }),
+        ('Бусад', {
+            'fields': ('created_by', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['created_at']
+
+
+@admin.register(Seminar)
+class SeminarAdmin(admin.ModelAdmin):
+    list_display = ['name', 'seminar_date', 'fee', 'is_active', 'created_at']
+    list_filter = ['is_active', 'seminar_date']
+    search_fields = ['name', 'description']
+    ordering = ['-seminar_date']
+    date_hierarchy = 'seminar_date'
+    
+    fieldsets = (
+        ('Үндсэн мэдээлэл', {
+            'fields': ('name', 'description', 'seminar_date', 'fee')
+        }),
+        ('Төлөв', {
+            'fields': ('is_active',)
+        }),
+    )
+
+
+@admin.register(SeminarPaymentAllocation)
+class SeminarPaymentAllocationAdmin(admin.ModelAdmin):
+    list_display = ['student', 'seminar', 'amount', 'bank_transaction', 'created_at']
+    list_filter = ['seminar', 'created_at']
+    search_fields = ['student__first_name', 'student__last_name', 'seminar__name', 'notes']
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('Банкны гүйлгээ', {
+            'fields': ('bank_transaction',)
+        }),
+        ('Семинарын мэдээлэл', {
+            'fields': ('student', 'seminar', 'amount', 'notes')
+        }),
+        ('Бусад', {
+            'fields': ('created_by', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['created_at']
+
+
+@admin.register(MembershipPaymentAllocation)
+class MembershipPaymentAllocationAdmin(admin.ModelAdmin):
+    list_display = ['student', 'payment_month', 'amount', 'bank_transaction', 'created_at']
+    list_filter = ['payment_month', 'created_at']
+    search_fields = ['student__first_name', 'student__last_name', 'notes']
+    date_hierarchy = 'payment_month'
+    ordering = ['-payment_month', '-created_at']
+    
+    fieldsets = (
+        ('Банкны гүйлгээ', {
+            'fields': ('bank_transaction',)
+        }),
+        ('Гишүүнчлэлийн мэдээлэл', {
+            'fields': ('student', 'payment_month', 'amount', 'notes')
         }),
         ('Бусад', {
             'fields': ('created_by', 'created_at'),

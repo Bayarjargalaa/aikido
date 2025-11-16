@@ -14,7 +14,8 @@ from openpyxl import load_workbook
 from .models import (
     Student, Instructor, ClassSession, Attendance, Payment, 
     ClassType, InstructorAssignment, BankTransaction, PaymentAllocation,
-    ExpenseCategory, ExpenseAllocation
+    IncomeCategory, IncomeAllocation, ExpenseCategory, ExpenseAllocation,
+    Seminar, SeminarPaymentAllocation, MembershipPaymentAllocation
 )
 from .forms import BankTransactionUploadForm, PaymentAllocationForm
 
@@ -472,53 +473,275 @@ def attendance_list(request):
 
 
 @login_required
-def payment_list(request):
-    """Төлбөрийн жагсаалт - Банкны хуулгаас холбогдсон төлбөрүүд"""
+def income_list(request):
+    """Бусад орлогын жагсаалт - Семинар, гишүүнчлэл гэх мэт"""
+    from django.db.models import Sum, Count, Q
+    
     # Get filter parameters
     month_filter = request.GET.get('month', '')
-    student_filter = request.GET.get('student', '')
+    category_filter = request.GET.get('category', '')
     
-    # Get payment allocations (not old Payment model)
-    allocations = PaymentAllocation.objects.select_related(
-        'bank_transaction', 'student', 'created_by'
-    ).order_by('-payment_month', '-created_at')
+    # Get income allocations (not student payments)
+    allocations = IncomeAllocation.objects.select_related(
+        'bank_transaction', 'income_category', 'created_by'
+    ).order_by('-income_date', '-created_at')
     
     # Apply filters
     if month_filter:
-        # Parse YYYY-MM format
         try:
-            from datetime import datetime
             year, month = month_filter.split('-')
             allocations = allocations.filter(
-                payment_month__year=year,
-                payment_month__month=month
+                income_date__year=year,
+                income_date__month=month
             )
         except:
             pass
     
-    if student_filter:
-        allocations = allocations.filter(student__id=student_filter)
+    if category_filter:
+        allocations = allocations.filter(income_category__id=category_filter)
     
-    # Get unique months and students for filters
-    months = PaymentAllocation.objects.dates('payment_month', 'month', order='DESC')
-    students = Student.objects.filter(
-        is_active=True,
-        payment_allocations__isnull=False
-    ).distinct().order_by('last_name', 'first_name')
+    # Get unique months and categories for filters
+    months = IncomeAllocation.objects.dates('income_date', 'month', order='DESC')
+    categories = IncomeCategory.objects.all().order_by('name')
     
     # Calculate summary
-    from django.db.models import Sum, Count
     summary = allocations.aggregate(
         total_amount=Sum('amount'),
         total_count=Count('id')
     )
     
+    # Group by category for summary
+    category_summary = allocations.values(
+        'income_category__name'
+    ).annotate(
+        count=Count('id'),
+        total=Sum('amount')
+    ).order_by('-total')
+    
     context = {
-        'allocations': allocations[:100],  # Limit to 100 records
+        'allocations': allocations[:100],
         'months': months,
-        'students': students,
+        'categories': categories,
         'selected_month': month_filter,
-        'selected_student': student_filter,
+        'selected_category': category_filter,
+        'summary': summary,
+        'category_summary': category_summary,
+    }
+    return render(request, 'aikido_app/income_list.html', context)
+
+@login_required
+def seminar_payment_list(request):
+    """Семинарын төлбөрийн жагсаалт"""
+    from collections import defaultdict
+    from django.db.models import Sum, Count, Avg
+    
+    # Get filters
+    selected_seminar = request.GET.get('seminar', '')
+    selected_student = request.GET.get('student', '')
+    
+    # Query payments
+    payments = SeminarPaymentAllocation.objects.select_related(
+        'student', 'seminar', 'bank_transaction', 'created_by'
+    ).order_by('-seminar__seminar_date', 'student__last_name')
+    
+    if selected_seminar:
+        payments = payments.filter(seminar_id=selected_seminar)
+    
+    if selected_student:
+        payments = payments.filter(
+            student__first_name__icontains=selected_student
+        ) | payments.filter(
+            student__last_name__icontains=selected_student
+        )
+    
+    # Calculate summary
+    summary = payments.aggregate(
+        total_amount=Sum('amount'),
+        total_count=Count('id'),
+        average_amount=Avg('amount')
+    )
+    
+    # Group by seminar
+    payments_by_seminar = defaultdict(list)
+    for payment in payments:
+        payments_by_seminar[payment.seminar].append(payment)
+    
+    # Get all seminars for filter
+    seminars = Seminar.objects.filter(is_active=True).order_by('-seminar_date')
+    
+    context = {
+        'payments_by_seminar': dict(payments_by_seminar),
+        'seminars': seminars,
+        'selected_seminar': selected_seminar,
+        'selected_student': selected_student,
+        'total_amount': summary['total_amount'] or 0,
+        'total_count': summary['total_count'] or 0,
+        'average_amount': summary['average_amount'] or 0,
+    }
+    
+    return render(request, 'aikido_app/seminar_payment_list.html', context)
+
+@login_required
+def membership_payment_list(request):
+    """Гишүүнчлэлийн төлбөрийн жагсаалт"""
+    from collections import defaultdict
+    from django.db.models import Sum, Count, Avg
+    
+    # Get filters
+    selected_month = request.GET.get('month', '')
+    selected_student = request.GET.get('student', '')
+    
+    # Query payments
+    payments = MembershipPaymentAllocation.objects.select_related(
+        'student', 'bank_transaction', 'created_by'
+    ).order_by('-payment_month', 'student__last_name')
+    
+    if selected_month:
+        from datetime import datetime
+        month_date = datetime.strptime(selected_month, '%Y-%m').date()
+        payments = payments.filter(payment_month=month_date)
+    
+    if selected_student:
+        payments = payments.filter(
+            student__first_name__icontains=selected_student
+        ) | payments.filter(
+            student__last_name__icontains=selected_student
+        )
+    
+    # Calculate summary
+    summary = payments.aggregate(
+        total_amount=Sum('amount'),
+        total_count=Count('id'),
+        average_amount=Avg('amount')
+    )
+    
+    # Group by month
+    payments_by_month = defaultdict(list)
+    for payment in payments:
+        payments_by_month[payment.payment_month].append(payment)
+    
+    context = {
+        'payments_by_month': dict(payments_by_month),
+        'selected_month': selected_month,
+        'selected_student': selected_student,
+        'total_amount': summary['total_amount'] or 0,
+        'total_count': summary['total_count'] or 0,
+        'average_amount': summary['average_amount'] or 0,
+    }
+    
+    return render(request, 'aikido_app/membership_payment_list.html', context)
+
+@login_required
+def payment_list(request):
+    """Төлбөрийн жагсаалт - Pivot хүснэгт хэлбэрээр"""
+    from collections import defaultdict
+    from datetime import datetime
+    
+    # Get all payment allocations
+    allocations = PaymentAllocation.objects.select_related(
+        'bank_transaction', 'student'
+    ).prefetch_related('student__class_types').order_by(
+        'student__class_types__name', 'student__first_name', 'student__last_name',  'payment_month'
+    )
+    
+    # Get all students who have payments
+    students = Student.objects.filter(
+        payment_allocations__isnull=False
+    ).prefetch_related('class_types').distinct().order_by('first_name', 'last_name')
+    
+    # Get all unique payment months
+    months = PaymentAllocation.objects.dates('payment_month', 'month', order='ASC')
+    
+    # Build pivot data structure
+    # pivot_data[student_id][month_date] = {'amount': X, 'date': Y, 'allocation_id': Z}
+    pivot_data = defaultdict(dict)
+    
+    for allocation in allocations:
+        student_id = allocation.student.id
+        month_key = allocation.payment_month
+        
+        if month_key not in pivot_data[student_id]:
+            pivot_data[student_id][month_key] = {
+                'amount': 0,
+                'date': allocation.bank_transaction.transaction_date if allocation.bank_transaction else None,
+                'allocations': []
+            }
+        
+        pivot_data[student_id][month_key]['amount'] += allocation.amount
+        pivot_data[student_id][month_key]['allocations'].append({
+            'id': allocation.id,
+            'amount': allocation.amount,
+            'date': allocation.bank_transaction.transaction_date if allocation.bank_transaction else None
+        })
+    
+    # Group students by class type
+    class_groups = defaultdict(list)
+    for student in students:
+        student_classes = student.class_types.all()
+        if student_classes:
+            for class_type in student_classes:
+                class_groups[class_type.name].append(student)
+        else:
+            class_groups['Ангигүй'].append(student)
+    
+    # Prepare rows grouped by class type with row totals
+    groups = []
+    for class_name in sorted(class_groups.keys()):
+        rows = []
+        group_total = 0
+        group_column_totals = []
+        
+        for student in class_groups[class_name]:
+            row = {
+                'student': student,
+                'months': [],
+                'row_total': 0
+            }
+            for month in months:
+                if month in pivot_data[student.id]:
+                    month_data = pivot_data[student.id][month]
+                    row['months'].append(month_data)
+                    row['row_total'] += month_data['amount']
+                else:
+                    row['months'].append(None)
+            rows.append(row)
+            group_total += row['row_total']
+        
+        # Calculate column totals for this group
+        for month in months:
+            month_total = sum(
+                pivot_data[student.id].get(month, {}).get('amount', 0)
+                for student in class_groups[class_name]
+            )
+            group_column_totals.append(month_total)
+        
+        groups.append({
+            'class_name': class_name,
+            'rows': rows,
+            'group_total': group_total,
+            'group_column_totals': group_column_totals
+        })
+    
+    # Calculate column totals for each month
+    column_totals = []
+    for month in months:
+        month_total = sum(
+            pivot_data[student.id].get(month, {}).get('amount', 0)
+            for student in students
+        )
+        column_totals.append(month_total)
+    
+    # Calculate summary
+    from django.db.models import Sum, Count
+    summary = PaymentAllocation.objects.aggregate(
+        total_amount=Sum('amount'),
+        total_count=Count('id')
+    )
+    
+    context = {
+        'groups': groups,
+        'months': months,
+        'column_totals': column_totals,
         'summary': summary,
     }
     return render(request, 'aikido_app/payment_list.html', context)
@@ -1342,6 +1565,52 @@ def bank_transaction_upload(request):
 
 
 @login_required
+def delete_payment_allocation(request, allocation_id):
+    """Төлбөрийн хуваарилалт устгах"""
+    allocation = get_object_or_404(PaymentAllocation, id=allocation_id)
+    transaction_id = allocation.bank_transaction.id
+    allocation.delete()
+    
+    # Update transaction status
+    transaction = BankTransaction.objects.get(id=transaction_id)
+    transaction.update_status()
+    
+    messages.success(request, 'Төлбөрийн хуваарилалт устгагдлаа!')
+    return redirect('bank_transaction_match', transaction_id=transaction_id)
+
+@login_required
+def delete_expense_allocation(request, allocation_id):
+    """Зардлын хуваарилалт устгах"""
+    allocation = get_object_or_404(ExpenseAllocation, id=allocation_id)
+    transaction_id = allocation.bank_transaction.id
+    allocation.delete()
+    
+    # Update transaction status
+    transaction = BankTransaction.objects.get(id=transaction_id)
+    transaction.update_status()
+    
+    messages.success(request, 'Зардлын хуваарилалт устгагдлаа!')
+    return redirect('bank_transaction_match', transaction_id=transaction_id)
+
+@login_required
+def delete_income_allocation(request, allocation_id):
+    """Орлогын хуваарилалт устгах"""
+    allocation = get_object_or_404(IncomeAllocation, id=allocation_id)
+    
+    if request.method == 'POST':
+        transaction_id = allocation.bank_transaction.id
+        allocation.delete()
+        
+        # Update transaction status
+        transaction = BankTransaction.objects.get(id=transaction_id)
+        transaction.update_status()
+        
+        messages.success(request, 'Орлогын хуваарилалт устгагдлаа!')
+        return redirect('bank_transaction_match', transaction_id=transaction_id)
+    
+    return render(request, 'aikido_app/delete_income_allocation.html', {'allocation': allocation})
+
+@login_required
 def bank_transaction_match(request, transaction_id):
     """Банкны гүйлгээг сурагч эсвэл зардалтай холбох"""
     transaction = get_object_or_404(BankTransaction, id=transaction_id)
@@ -1352,27 +1621,94 @@ def bank_transaction_match(request, transaction_id):
     
     if request.method == 'POST':
         if is_income:
-            # Handle payment allocations (income)
-            student_ids = request.POST.getlist('student_id[]')
-            payment_months = request.POST.getlist('payment_month[]')
-            amounts = request.POST.getlist('amount[]')
-            notes_list = request.POST.getlist('notes[]')
+            # Check income type from form
+            income_type = request.POST.get('income_type', 'student_payment')
             
-            for i in range(len(student_ids)):
-                if student_ids[i] and payment_months[i] and amounts[i]:
+            # Debug logging
+            print(f"DEBUG: income_type = {income_type}")
+            print(f"DEBUG: POST data = {dict(request.POST)}")
+            
+            if income_type == 'student_payment':
+                # Handle student payment allocations
+                student_ids = request.POST.getlist('student_id[]')
+                payment_months = request.POST.getlist('payment_month[]')
+                amounts = request.POST.getlist('amount[]')
+                notes_list = request.POST.getlist('notes[]')
+                
+                for i in range(len(student_ids)):
+                    if student_ids[i] and payment_months[i] and amounts[i]:
+                        try:
+                            student = Student.objects.get(id=student_ids[i])
+                            amount = Decimal(amounts[i])
+                            payment_month = datetime.strptime(payment_months[i], '%Y-%m').date()
+                            
+                            instructor = None
+                            if hasattr(request.user, 'instructor_profile'):
+                                instructor = request.user.instructor_profile
+                            
+                            PaymentAllocation.objects.create(
+                                bank_transaction=transaction,
+                                student=student,
+                                payment_month=payment_month,
+                                amount=amount,
+                                notes=notes_list[i] if i < len(notes_list) else '',
+                                created_by=instructor
+                            )
+                        except Exception as e:
+                            messages.error(request, f'Алдаа гарлаа: {str(e)}')
+                            return redirect('bank_transaction_match', transaction_id=transaction_id)
+                
+                messages.success(request, f'{len([x for x in student_ids if x])} хуваарилалт амжилттай үүслээ!')
+            
+            elif income_type == 'other_income':
+                # Handle other income allocations
+                income_categories = request.POST.getlist('income_category[]')
+                new_categories = request.POST.getlist('new_income_category[]')
+                income_dates = request.POST.getlist('income_date[]')
+                amounts = request.POST.getlist('amount[]')
+                notes_list = request.POST.getlist('notes[]')
+                
+                # Use the maximum length to iterate through all rows
+                max_len = max(len(income_categories), len(new_categories), len(income_dates), len(amounts))
+                
+                for i in range(max_len):
+                    category_id = income_categories[i] if i < len(income_categories) else ''
+                    new_category_name = new_categories[i] if i < len(new_categories) else ''
+                    income_date_str = income_dates[i] if i < len(income_dates) else ''
+                    amount_str = amounts[i] if i < len(amounts) else ''
+                    
+                    # Skip if no amount provided
+                    if not amount_str:
+                        continue
+                    
+                    # Must have either category_id or new_category_name
+                    if not category_id and not new_category_name:
+                        continue
+                    
+                    # Must have income_date
+                    if not income_date_str:
+                        continue
+                        
                     try:
-                        student = Student.objects.get(id=student_ids[i])
-                        amount = Decimal(amounts[i])
-                        payment_month = datetime.strptime(payment_months[i], '%Y-%m').date()
+                        # Get or create category
+                        if new_category_name:
+                            category, _ = IncomeCategory.objects.get_or_create(name=new_category_name.strip())
+                        elif category_id:
+                            category = IncomeCategory.objects.get(id=category_id)
+                        else:
+                            continue
+                        
+                        amount = Decimal(amount_str)
+                        income_date = datetime.strptime(income_date_str, '%Y-%m-%d').date()
                         
                         instructor = None
                         if hasattr(request.user, 'instructor_profile'):
                             instructor = request.user.instructor_profile
                         
-                        PaymentAllocation.objects.create(
+                        IncomeAllocation.objects.create(
                             bank_transaction=transaction,
-                            student=student,
-                            payment_month=payment_month,
+                            income_category=category,
+                            income_date=income_date,
                             amount=amount,
                             notes=notes_list[i] if i < len(notes_list) else '',
                             created_by=instructor
@@ -1380,8 +1716,84 @@ def bank_transaction_match(request, transaction_id):
                     except Exception as e:
                         messages.error(request, f'Алдаа гарлаа: {str(e)}')
                         return redirect('bank_transaction_match', transaction_id=transaction_id)
+                
+                messages.success(request, 'Орлогын хуваарилалт амжилттай үүслээ!')
             
-            messages.success(request, f'{len([x for x in student_ids if x])} хуваарилалт амжилттай үүслээ!')
+            elif income_type == 'seminar_payment':
+                # Handle seminar payment allocations
+                student_ids = request.POST.getlist('seminar_student_id[]')
+                seminar_ids = request.POST.getlist('seminar_id[]')
+                amounts = request.POST.getlist('amount[]')
+                notes_list = request.POST.getlist('notes[]')
+                
+                for i in range(len(student_ids)):
+                    if student_ids[i] and seminar_ids[i] and i < len(amounts) and amounts[i]:
+                        try:
+                            student = Student.objects.get(id=student_ids[i])
+                            seminar = Seminar.objects.get(id=seminar_ids[i])
+                            amount = Decimal(amounts[i])
+                            
+                            instructor = None
+                            if hasattr(request.user, 'instructor_profile'):
+                                instructor = request.user.instructor_profile
+                            
+                            SeminarPaymentAllocation.objects.create(
+                                bank_transaction=transaction,
+                                student=student,
+                                seminar=seminar,
+                                amount=amount,
+                                notes=notes_list[i] if i < len(notes_list) else '',
+                                created_by=instructor
+                            )
+                        except Exception as e:
+                            messages.error(request, f'Алдаа гарлаа: {str(e)}')
+                            return redirect('bank_transaction_match', transaction_id=transaction_id)
+                
+                messages.success(request, 'Семинарын төлбөр амжилттай холбогдлоо!')
+            
+            elif income_type == 'membership_payment':
+                # Handle membership payment allocations
+                student_ids = request.POST.getlist('membership_student_id[]')
+                payment_months = request.POST.getlist('membership_month[]')
+                amounts = request.POST.getlist('amount[]')
+                notes_list = request.POST.getlist('notes[]')
+                
+                for i in range(len(student_ids)):
+                    if student_ids[i] and i < len(payment_months) and payment_months[i] and i < len(amounts) and amounts[i]:
+                        try:
+                            student = Student.objects.get(id=student_ids[i])
+                            amount = Decimal(amounts[i])
+                            payment_month = datetime.strptime(payment_months[i], '%Y-%m').date()
+                            
+                            instructor = None
+                            if hasattr(request.user, 'instructor_profile'):
+                                instructor = request.user.instructor_profile
+                            
+                            MembershipPaymentAllocation.objects.create(
+                                bank_transaction=transaction,
+                                student=student,
+                                payment_month=payment_month,
+                                amount=amount,
+                                notes=notes_list[i] if i < len(notes_list) else '',
+                                created_by=instructor
+                            )
+                        except Exception as e:
+                            messages.error(request, f'Алдаа гарлаа: {str(e)}')
+                            return redirect('bank_transaction_match', transaction_id=transaction_id)
+                
+                messages.success(request, 'Гишүүнчлэлийн төлбөр амжилттай холбогдлоо!')
+            
+            # Update transaction status
+            transaction.update_status()
+            
+            # Check if there's still remaining amount
+            remaining = transaction.get_remaining_amount()
+            if remaining > 0:
+                messages.info(request, f'Үлдсэн дүн: {remaining:,.0f}₮')
+                return redirect('bank_transaction_match', transaction_id=transaction_id)
+            else:
+                messages.success(request, 'Гүйлгээ бүрэн хуваарилагдлаа!')
+                return redirect('bank_transaction_list')
         
         elif is_expense:
             # Handle expense allocations (expense)
@@ -1431,7 +1843,15 @@ def bank_transaction_match(request, transaction_id):
         
         # Update transaction status
         transaction.update_status()
-        return redirect('bank_transaction_list')
+        
+        # Check if there's still remaining amount
+        remaining = transaction.get_remaining_amount()
+        if remaining > 0:
+            messages.info(request, f'Үлдсэн дүн: {remaining:,.0f}₮')
+            return redirect('bank_transaction_match', transaction_id=transaction_id)
+        else:
+            messages.success(request, 'Гүйлгээ бүрэн хуваарилагдлаа!')
+            return redirect('bank_transaction_list')
     
     # GET request - show form
     context = {
@@ -1444,9 +1864,19 @@ def bank_transaction_match(request, transaction_id):
     if is_income:
         students = Student.objects.filter(is_active=True).order_by('first_name', 'last_name')
         allocations = transaction.allocations.all()
+        seminars = Seminar.objects.filter(is_active=True).order_by('-seminar_date')
+        income_categories = IncomeCategory.objects.all().order_by('name')
+        income_allocations = transaction.income_allocations.all()
+        seminar_allocations = transaction.seminar_allocations.all()
+        membership_allocations = transaction.membership_allocations.all()
         context.update({
             'students': students,
             'allocations': allocations,
+            'seminars': seminars,
+            'income_categories': income_categories,
+            'income_allocations': income_allocations,
+            'seminar_allocations': seminar_allocations,
+            'membership_allocations': membership_allocations,
         })
     elif is_expense:
         expense_categories = ExpenseCategory.objects.all().order_by('name')

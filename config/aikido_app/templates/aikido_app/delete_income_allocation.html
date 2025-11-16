@@ -1,0 +1,83 @@
+{% extends "aikido_app/base.html" %}
+
+{% block title %}Орлогын хуваарилалт устгах{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        Орлогын хуваарилалт устгах
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        Та дараах орлогын хуваарилалтыг устгахдаа итгэлтэй байна уу?
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Орлогын төрөл:</strong>
+                            <p class="mb-0">{{ allocation.income_category.name }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Огноо:</strong>
+                            <p class="mb-0">{{ allocation.income_date|date:"Y-m-d" }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Дүн:</strong>
+                            <p class="mb-0 text-success">{{ allocation.amount|floatformat:0 }}₮</p>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Банкны гүйлгээ:</strong>
+                            <p class="mb-0">{{ allocation.bank_transaction.transaction_date|date:"Y-m-d" }}</p>
+                        </div>
+                    </div>
+                    
+                    {% if allocation.notes %}
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <strong>Тэмдэглэл:</strong>
+                            <p class="mb-0">{{ allocation.notes }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <strong>Үүсгэсэн:</strong>
+                            <p class="mb-0">
+                                {% if allocation.created_by %}
+                                    {{ allocation.created_by.user.first_name }} {{ allocation.created_by.user.last_name }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                                ({{ allocation.created_at|date:"Y-m-d H:i" }})
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'bank_transaction_match' allocation.bank_transaction.id %}" class="btn btn-secondary">
+                                <i class="fas fa-times mr-2"></i>Цуцлах
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash mr-2"></i>Устгах
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
