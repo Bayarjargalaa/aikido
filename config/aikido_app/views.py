@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -7,9 +7,16 @@ from django.db.models import Count, Sum
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime, timedelta
+from decimal import Decimal
 import json
 import calendar
-from .models import Student, Instructor, ClassSession, Attendance, Payment, ClassType, InstructorAssignment
+from openpyxl import load_workbook
+from .models import (
+    Student, Instructor, ClassSession, Attendance, Payment, 
+    ClassType, InstructorAssignment, BankTransaction, PaymentAllocation,
+    ExpenseCategory, ExpenseAllocation
+)
+from .forms import BankTransactionUploadForm, PaymentAllocationForm
 
 
 def login_view(request):
@@ -466,9 +473,55 @@ def attendance_list(request):
 
 @login_required
 def payment_list(request):
-    """Төлбөрийн жагсаалт"""
-    payments = Payment.objects.select_related('student').order_by('-transaction_date')[:50]
-    return render(request, 'aikido_app/payment_list.html', {'payments': payments})
+    """Төлбөрийн жагсаалт - Банкны хуулгаас холбогдсон төлбөрүүд"""
+    # Get filter parameters
+    month_filter = request.GET.get('month', '')
+    student_filter = request.GET.get('student', '')
+    
+    # Get payment allocations (not old Payment model)
+    allocations = PaymentAllocation.objects.select_related(
+        'bank_transaction', 'student', 'created_by'
+    ).order_by('-payment_month', '-created_at')
+    
+    # Apply filters
+    if month_filter:
+        # Parse YYYY-MM format
+        try:
+            from datetime import datetime
+            year, month = month_filter.split('-')
+            allocations = allocations.filter(
+                payment_month__year=year,
+                payment_month__month=month
+            )
+        except:
+            pass
+    
+    if student_filter:
+        allocations = allocations.filter(student__id=student_filter)
+    
+    # Get unique months and students for filters
+    months = PaymentAllocation.objects.dates('payment_month', 'month', order='DESC')
+    students = Student.objects.filter(
+        is_active=True,
+        payment_allocations__isnull=False
+    ).distinct().order_by('last_name', 'first_name')
+    
+    # Calculate summary
+    from django.db.models import Sum, Count
+    summary = allocations.aggregate(
+        total_amount=Sum('amount'),
+        total_count=Count('id')
+    )
+    
+    context = {
+        'allocations': allocations[:100],  # Limit to 100 records
+        'months': months,
+        'students': students,
+        'selected_month': month_filter,
+        'selected_student': student_filter,
+        'summary': summary,
+    }
+    return render(request, 'aikido_app/payment_list.html', context)
 
 
 @login_required
@@ -593,15 +646,25 @@ def attendance_record(request):
                         }
                     )
                     
-                    # Create or update attendance
-                    Attendance.objects.update_or_create(
-                        session=session,
-                        student=student,
-                        defaults={
-                            'is_present': True,
-                            'recorded_by': instructor
-                        }
-                    )
+                    # Get is_present from request data (defaults to True if not specified)
+                    is_present = item.get('is_present', True)
+                    
+                    if is_present:
+                        # Create or update attendance
+                        Attendance.objects.update_or_create(
+                            session=session,
+                            student=student,
+                            defaults={
+                                'is_present': True,
+                                'recorded_by': instructor
+                            }
+                        )
+                    else:
+                        # Delete attendance if unchecked
+                        Attendance.objects.filter(
+                            session=session,
+                            student=student
+                        ).delete()
                 except Student.DoesNotExist:
                     pass
             
@@ -726,7 +789,7 @@ def attendance_record(request):
         
         sessions_with_instructors = sessions_query.prefetch_related('instructor_assignments__instructor')
         
-        # Build instructor assignment map: {date: {'lead': instructor, 'assistant': instructor, 'class_type': name, 'has_assignments': bool}}
+        # Build instructor assignment map: {date: {'lead': instructor, 'assistant': instructor, 'class_type': name, 'has_assignments': bool, 'is_cancelled': bool}}
         instructor_assignment_map = {}
         for session in sessions_with_instructors:
             date_str = session.date.strftime('%Y-%m-%d')
@@ -734,7 +797,8 @@ def attendance_record(request):
             
             instructor_assignment_map[date_str] = {
                 'class_type': session.class_type.name,
-                'has_assignments': has_assignments
+                'has_assignments': has_assignments,
+                'is_cancelled': session.is_cancelled
             }
             
             for assignment in session.instructor_assignments.all():
@@ -749,6 +813,7 @@ def attendance_record(request):
             assignments = instructor_assignment_map.get(date_str, {})
             session_class_type = assignments.get('class_type')
             has_assignments = assignments.get('has_assignments', False)
+            is_cancelled = assignments.get('is_cancelled', False)
             
             # Decision logic for showing instructors:
             if selected_class_type:
@@ -759,7 +824,11 @@ def attendance_record(request):
                     date_item['assistant_instructor'] = default_assistant
                 elif session_class_type == selected_class_type:
                     # Session exists and matches selected class type
-                    if has_assignments:
+                    if is_cancelled:
+                        # Session is cancelled - show nothing (empty)
+                        date_item['lead_instructor'] = None
+                        date_item['assistant_instructor'] = None
+                    elif has_assignments:
                         # Has instructor assignments - show them
                         date_item['lead_instructor'] = assignments.get('lead')
                         date_item['assistant_instructor'] = assignments.get('assistant')
@@ -773,9 +842,13 @@ def attendance_record(request):
                     date_item['assistant_instructor'] = None
             else:
                 # No class type selected (viewing all classes)
-                # Only show assigned instructors, no defaults
-                date_item['lead_instructor'] = assignments.get('lead')
-                date_item['assistant_instructor'] = assignments.get('assistant')
+                # Only show assigned instructors, no defaults (unless cancelled)
+                if is_cancelled:
+                    date_item['lead_instructor'] = None
+                    date_item['assistant_instructor'] = None
+                else:
+                    date_item['lead_instructor'] = assignments.get('lead')
+                    date_item['assistant_instructor'] = assignments.get('assistant')
     
     # Calculate instructor statistics for the selected month and class type
     instructor_stats = []
@@ -899,8 +972,8 @@ def assign_instructors(request):
                 class_type=class_type,
                 defaults={
                     'weekday': date_obj.weekday(),
-                    'start_time': '09:00',
-                    'end_time': '11:00',
+                    'start_time': '19:30',
+                    'end_time': '21:00',
                 }
             )
             
@@ -909,6 +982,10 @@ def assign_instructors(request):
             
             # Handle NO_CLASS case - if either instructor is NO_CLASS, don't assign anyone
             if lead_instructor_id == 'NO_CLASS' or assistant_instructor_id == 'NO_CLASS':
+                # Mark session as cancelled
+                session.is_cancelled = True
+                session.save()
+                
                 return JsonResponse({
                     'success': True,
                     'message': 'Хичээл ороогүй гэж тэмдэглэгдлээ'
@@ -944,6 +1021,11 @@ def assign_instructors(request):
                         'error': f'Туслах багш (ID: {assistant_instructor_id}) олдсонгүй'
                     }, status=400)
             
+            # If instructors were assigned, mark session as not cancelled
+            if lead_instructor_id or assistant_instructor_id:
+                session.is_cancelled = False
+                session.save()
+            
             return JsonResponse({
                 'success': True,
                 'message': 'Багш амжилттай томилогдлоо'
@@ -963,5 +1045,418 @@ def assign_instructors(request):
                 'success': False,
                 'error': f'Алдаа гарлаа: {str(e)}'
             }, status=400)
+
+
+@login_required
+def bank_transaction_list(request):
+    """Банкны гүйлгээний жагсаалт"""
+    from django.core.paginator import Paginator
+    
+    transactions = BankTransaction.objects.all().select_related().prefetch_related(
+        'allocations__student', 'expense_allocations__expense_category'
+    )
+    
+    # Filter by status
+    status_filter = request.GET.get('status')
+    if status_filter:
+        transactions = transactions.filter(status=status_filter)
+    
+    # Filter by month
+    month_filter = request.GET.get('month')
+    if month_filter:
+        try:
+            year, month = month_filter.split('-')
+            transactions = transactions.filter(
+                transaction_date__year=year,
+                transaction_date__month=month
+            )
+        except:
+            pass
+    
+    # Filter by transaction type (income/expense)
+    type_filter = request.GET.get('type')
+    if type_filter == 'income':
+        transactions = transactions.filter(credit_amount__gt=0)
+    elif type_filter == 'expense':
+        transactions = transactions.exclude(debit_amount=0).exclude(debit_amount__isnull=True)
+    
+    # Order by date descending
+    transactions = transactions.order_by('-transaction_date', '-imported_at')
+    
+    # Pagination
+    paginator = Paginator(transactions, 50)  # 50 transactions per page
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Get unique months for filter
+    months = BankTransaction.objects.dates('transaction_date', 'month', order='DESC')
+    
+    # Calculate summary for current filter
+    from django.db.models import Sum, Count, Q
+    summary = transactions.aggregate(
+        total_count=Count('id'),
+        income_count=Count('id', filter=Q(credit_amount__gt=0)),
+        expense_count=Count('id', filter=~Q(debit_amount=0) & ~Q(debit_amount__isnull=True)),
+        total_income=Sum('credit_amount', filter=Q(credit_amount__gt=0)),
+        total_expense=Sum('debit_amount', filter=~Q(debit_amount=0) & ~Q(debit_amount__isnull=True)),
+    )
+    
+    context = {
+        'page_obj': page_obj,
+        'transactions': page_obj.object_list,
+        'status_choices': BankTransaction.STATUS_CHOICES,
+        'selected_status': status_filter,
+        'selected_month': month_filter,
+        'selected_type': type_filter,
+        'months': months,
+        'summary': summary,
+    }
+    return render(request, 'aikido_app/bank_transaction_list.html', context)
+
+
+@login_required
+def bank_transaction_upload(request):
+    """Excel файл импортлох"""
+    if request.method == 'POST':
+        form = BankTransactionUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                excel_file = request.FILES['excel_file']
+                bank_format = form.cleaned_data['bank_format']
+                start_row = form.cleaned_data['start_row']
+                
+                # Load Excel file
+                workbook = load_workbook(excel_file, data_only=True)
+                sheet = workbook.active
+                
+                # Determine column mapping
+                if bank_format == 'standard':
+                    # Find columns by header names
+                    date_header = form.cleaned_data['date_header']
+                    amount_header = form.cleaned_data['amount_header']
+                    desc_header = form.cleaned_data['description_header']
+                    payer_header = form.cleaned_data.get('payer_header', '')
+                    
+                    # Find column indices from first row
+                    header_row = sheet[1]
+                    date_col = None
+                    opening_col = None
+                    debit_col = None
+                    credit_col = None
+                    closing_col = None
+                    desc_col = None
+                    counterparty_col = None
+                    
+                    for idx, cell in enumerate(header_row, start=1):
+                        if cell.value:
+                            cell_value = str(cell.value).strip()
+                            print(f"DEBUG: Column {cell.column_letter} = '{cell_value}'")
+                            
+                            if 'огноо' in cell_value.lower():
+                                date_col = cell.column_letter
+                            elif 'эхний' in cell_value.lower() and 'үлдэгдэл' in cell_value.lower():
+                                opening_col = cell.column_letter
+                            elif 'дебит' in cell_value.lower():
+                                debit_col = cell.column_letter
+                            elif 'кредит' in cell_value.lower():
+                                credit_col = cell.column_letter
+                            elif 'эцсийн' in cell_value.lower() and 'үлдэгдэл' in cell_value.lower():
+                                closing_col = cell.column_letter
+                            elif 'утга' in cell_value.lower():
+                                desc_col = cell.column_letter
+                            elif 'харьцсан' in cell_value.lower() or 'данс' in cell_value.lower():
+                                counterparty_col = cell.column_letter
+                    
+                    print(f"DEBUG: Found columns - Date:{date_col}, Opening:{opening_col}, Debit:{debit_col}, Credit:{credit_col}, Closing:{closing_col}, Desc:{desc_col}, Counterparty:{counterparty_col}")
+                    
+                    if not date_col or not credit_col or not desc_col:
+                        messages.error(request, f'Шаардлагатай баганууд олдсонгүй. Date:{date_col}, Credit:{credit_col}, Desc:{desc_col}')
+                        return render(request, 'aikido_app/bank_transaction_upload.html', {'form': form})
+                else:
+                    # Custom format - use manual column letters
+                    date_col = form.cleaned_data['date_column'].upper()
+                    credit_col = form.cleaned_data['amount_column'].upper()
+                    desc_col = form.cleaned_data['description_column'].upper()
+                    counterparty_col = form.cleaned_data.get('payer_name_column', '').upper()
+                    opening_col = None
+                    debit_col = None
+                    closing_col = None
+                
+                imported_count = 0
+                errors = []
+                skipped_count = 0
+                
+                print(f"DEBUG: Starting import from row {start_row} to {sheet.max_row}")
+                print(f"DEBUG: Columns - Date:{date_col}, Credit:{credit_col}, Desc:{desc_col}")
+                
+                for row_num in range(start_row, sheet.max_row + 1):
+                    try:
+                        # Read all values
+                        date_val = sheet[f'{date_col}{row_num}'].value
+                        opening_val = sheet[f'{opening_col}{row_num}'].value if opening_col else None
+                        debit_val = sheet[f'{debit_col}{row_num}'].value if debit_col else None
+                        credit_val = sheet[f'{credit_col}{row_num}'].value if credit_col else None
+                        closing_val = sheet[f'{closing_col}{row_num}'].value if closing_col else None
+                        desc_val = sheet[f'{desc_col}{row_num}'].value
+                        counterparty_val = sheet[f'{counterparty_col}{row_num}'].value if counterparty_col else ''
+                        
+                        print(f"DEBUG Row {row_num}: date={date_val}, opening={opening_val}, debit={debit_val}, credit={credit_val}, closing={closing_val}, desc={desc_val}")
+                        
+                        # Skip empty rows (only if date is missing)
+                        if not date_val:
+                            skipped_count += 1
+                            continue
+                        
+                        # Parse all amounts
+                        opening_balance = None
+                        debit_amount = None
+                        credit_amount = None
+                        closing_balance = None
+                        
+                        if opening_val:
+                            try:
+                                opening_balance = Decimal(str(opening_val).replace(',', '').replace(' ', ''))
+                            except:
+                                pass
+                        
+                        if debit_val:
+                            try:
+                                debit_amount = Decimal(str(debit_val).replace(',', '').replace(' ', ''))
+                            except:
+                                pass
+                        
+                        if credit_val:
+                            try:
+                                credit_amount = Decimal(str(credit_val).replace(',', '').replace(' ', ''))
+                            except:
+                                pass
+                        
+                        if closing_val:
+                            try:
+                                closing_balance = Decimal(str(closing_val).replace(',', '').replace(' ', ''))
+                            except:
+                                pass
+                        
+                        # Determine main amount (use credit if available, otherwise debit)
+                        main_amount = Decimal('0.00')
+                        if credit_amount and credit_amount > 0:
+                            main_amount = credit_amount
+                        elif debit_amount and debit_amount != 0:
+                            main_amount = abs(debit_amount)  # Use absolute value since debit is negative
+                        
+                        # Parse date
+                        if isinstance(date_val, datetime):
+                            transaction_date = date_val.date()
+                        elif isinstance(date_val, str):
+                            # Try multiple date formats (including datetime formats)
+                            transaction_date = None
+                            date_formats = [
+                                '%Y/%m/%d %H:%M',    # 2025/07/30 12:15
+                                '%Y/%m/%d  %H:%M',   # 2025/07/30  12:15 (double space)
+                                '%Y-%m-%d %H:%M',
+                                '%Y/%m/%d',
+                                '%Y-%m-%d',
+                                '%d.%m.%Y',
+                                '%d/%m/%Y'
+                            ]
+                            for date_format in date_formats:
+                                try:
+                                    transaction_date = datetime.strptime(date_val.strip(), date_format).date()
+                                    break
+                                except:
+                                    continue
+                            
+                            if not transaction_date:
+                                print(f"DEBUG: Failed to parse date '{date_val}' on row {row_num}")
+                                errors.append(f'Мөр {row_num}: Огнооны формат буруу - {date_val}')
+                                error_count += 1
+                                continue
+                        else:
+                            print(f"DEBUG: Invalid date type '{type(date_val)}' on row {row_num}")
+                            errors.append(f'Мөр {row_num}: Огнооны формат буруу')
+                            error_count += 1
+                            continue
+                        
+                        # Check for duplicates before creating
+                        # Check based on date, description, and either credit or debit amount
+                        duplicate_filter = {
+                            'transaction_date': transaction_date,
+                            'description': str(desc_val)[:500] if desc_val else ''
+                        }
+                        
+                        if credit_amount and credit_amount > 0:
+                            duplicate_filter['credit_amount'] = credit_amount
+                        elif debit_amount and debit_amount != 0:
+                            duplicate_filter['debit_amount'] = debit_amount
+                        
+                        existing = BankTransaction.objects.filter(**duplicate_filter).exists()
+                        
+                        if existing:
+                            skipped_count += 1
+                            continue
+                        
+                        # Create transaction
+                        BankTransaction.objects.create(
+                            transaction_date=transaction_date,
+                            opening_balance=opening_balance,
+                            debit_amount=debit_amount,
+                            credit_amount=credit_amount,
+                            closing_balance=closing_balance,
+                            amount=main_amount,  # Credit if available, otherwise debit
+                            description=str(desc_val)[:500] if desc_val else '',
+                            counterparty_account=str(counterparty_val)[:500] if counterparty_val else '',
+                            payer_name='',  # Will be parsed from counterparty_account later if needed
+                            status=BankTransaction.STATUS_PENDING
+                        )
+                        imported_count += 1
+                        
+                    except Exception as e:
+                        errors.append(f'Мөр {row_num}: {str(e)}')
+                
+                if imported_count > 0:
+                    messages.success(request, f'✅ {imported_count} гүйлгээ амжилттай импортлогдлоо!')
+                if skipped_count > 0:
+                    messages.info(request, f'ℹ️ {skipped_count} гүйлгээ алгасагдсан (давхардсан эсвэл хоосон)')
+                if imported_count == 0 and skipped_count == 0:
+                    messages.warning(request, 'Импортлогдсон гүйлгээ байхгүй')
+                
+                if errors:
+                    for error in errors[:10]:  # Show first 10 errors
+                        messages.warning(request, error)
+                    if len(errors) > 10:
+                        messages.warning(request, f'... болон {len(errors) - 10} бусад алдаа')
+                
+                print(f"DEBUG: Total imported={imported_count}, skipped={skipped_count}, errors={len(errors)}")
+                
+                return redirect('bank_transaction_list')
+                
+            except Exception as e:
+                messages.error(request, f'Файл уншихад алдаа гарлаа: {str(e)}')
+    else:
+        form = BankTransactionUploadForm()
+    
+    context = {
+        'form': form,
+    }
+    return render(request, 'aikido_app/bank_transaction_upload.html', context)
+
+
+@login_required
+def bank_transaction_match(request, transaction_id):
+    """Банкны гүйлгээг сурагч эсвэл зардалтай холбох"""
+    transaction = get_object_or_404(BankTransaction, id=transaction_id)
+    
+    # Determine if this is income (credit) or expense (debit)
+    is_income = transaction.credit_amount and transaction.credit_amount > 0
+    is_expense = transaction.debit_amount and transaction.debit_amount != 0
+    
+    if request.method == 'POST':
+        if is_income:
+            # Handle payment allocations (income)
+            student_ids = request.POST.getlist('student_id[]')
+            payment_months = request.POST.getlist('payment_month[]')
+            amounts = request.POST.getlist('amount[]')
+            notes_list = request.POST.getlist('notes[]')
+            
+            for i in range(len(student_ids)):
+                if student_ids[i] and payment_months[i] and amounts[i]:
+                    try:
+                        student = Student.objects.get(id=student_ids[i])
+                        amount = Decimal(amounts[i])
+                        payment_month = datetime.strptime(payment_months[i], '%Y-%m').date()
+                        
+                        instructor = None
+                        if hasattr(request.user, 'instructor_profile'):
+                            instructor = request.user.instructor_profile
+                        
+                        PaymentAllocation.objects.create(
+                            bank_transaction=transaction,
+                            student=student,
+                            payment_month=payment_month,
+                            amount=amount,
+                            notes=notes_list[i] if i < len(notes_list) else '',
+                            created_by=instructor
+                        )
+                    except Exception as e:
+                        messages.error(request, f'Алдаа гарлаа: {str(e)}')
+                        return redirect('bank_transaction_match', transaction_id=transaction_id)
+            
+            messages.success(request, f'{len([x for x in student_ids if x])} хуваарилалт амжилттай үүслээ!')
+        
+        elif is_expense:
+            # Handle expense allocations (expense)
+            expense_categories = request.POST.getlist('expense_category[]')
+            new_categories = request.POST.getlist('new_category[]')
+            expense_dates = request.POST.getlist('expense_date[]')
+            amounts = request.POST.getlist('amount[]')
+            notes_list = request.POST.getlist('notes[]')
+            
+            for i in range(len(expense_categories)):
+                category_id = expense_categories[i] if i < len(expense_categories) else ''
+                new_category_name = new_categories[i] if i < len(new_categories) else ''
+                
+                if (category_id or new_category_name) and i < len(expense_dates) and i < len(amounts):
+                    if not amounts[i]:
+                        continue
+                        
+                    try:
+                        # Get or create category
+                        if new_category_name:
+                            category, _ = ExpenseCategory.objects.get_or_create(name=new_category_name.strip())
+                        elif category_id:
+                            category = ExpenseCategory.objects.get(id=category_id)
+                        else:
+                            continue
+                        
+                        amount = Decimal(amounts[i])
+                        expense_date = datetime.strptime(expense_dates[i], '%Y-%m-%d').date()
+                        
+                        instructor = None
+                        if hasattr(request.user, 'instructor_profile'):
+                            instructor = request.user.instructor_profile
+                        
+                        ExpenseAllocation.objects.create(
+                            bank_transaction=transaction,
+                            expense_category=category,
+                            expense_date=expense_date,
+                            amount=amount,
+                            notes=notes_list[i] if i < len(notes_list) else '',
+                            created_by=instructor
+                        )
+                    except Exception as e:
+                        messages.error(request, f'Алдаа гарлаа: {str(e)}')
+                        return redirect('bank_transaction_match', transaction_id=transaction_id)
+            
+            messages.success(request, 'Зардлын хуваарилалт амжилттай үүслээ!')
+        
+        # Update transaction status
+        transaction.update_status()
+        return redirect('bank_transaction_list')
+    
+    # GET request - show form
+    context = {
+        'transaction': transaction,
+        'is_income': is_income,
+        'is_expense': is_expense,
+        'remaining_amount': transaction.get_remaining_amount(),
+    }
+    
+    if is_income:
+        students = Student.objects.filter(is_active=True).order_by('first_name', 'last_name')
+        allocations = transaction.allocations.all()
+        context.update({
+            'students': students,
+            'allocations': allocations,
+        })
+    elif is_expense:
+        expense_categories = ExpenseCategory.objects.all().order_by('name')
+        expense_allocations = transaction.expense_allocations.all()
+        context.update({
+            'expense_categories': expense_categories,
+            'expense_allocations': expense_allocations,
+        })
+    
+    return render(request, 'aikido_app/bank_transaction_match.html', context)
+
     
     return JsonResponse({'error': 'Invalid request method'}, status=405)

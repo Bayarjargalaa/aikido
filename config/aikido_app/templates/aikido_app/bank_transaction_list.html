@@ -1,0 +1,347 @@
+{% extends 'aikido_app/base.html' %}
+{% load static %}
+
+{% block title %}Банкны гүйлгээ{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">
+                <i class="fas fa-university mr-2 text-blue-600"></i>Банкны гүйлгээ
+            </h1>
+            <p class="text-gray-600">Excel файлаас импортлосон банкны гүйлгээ</p>
+        </div>
+        <a href="{% url 'bank_transaction_upload' %}" 
+           class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg shadow-lg hover:from-blue-700 hover:to-purple-700 transition-all">
+            <i class="fas fa-upload mr-2"></i>Excel импортлох
+        </a>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 mb-1">Нийт гүйлгээ</p>
+                    <p class="text-2xl font-bold text-gray-800">{{ summary.total_count|default:0 }}</p>
+                </div>
+                <div class="bg-blue-100 rounded-full p-3">
+                    <i class="fas fa-list text-blue-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-md p-4 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-green-100 mb-1">Орлого</p>
+                    <p class="text-2xl font-bold">{{ summary.total_income|floatformat:0|default:"0" }}₮</p>
+                    <p class="text-xs text-green-100">{{ summary.income_count|default:0 }} гүйлгээ</p>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-full p-3">
+                    <i class="fas fa-arrow-down text-xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-md p-4 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-red-100 mb-1">Зардал</p>
+                    <p class="text-2xl font-bold">{{ summary.total_expense|floatformat:0|default:"0" }}₮</p>
+                    <p class="text-xs text-red-100">{{ summary.expense_count|default:0 }} гүйлгээ</p>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-full p-3">
+                    <i class="fas fa-arrow-up text-xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-md p-4 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-purple-100 mb-1">Үлдэгдэл</p>
+                    <p class="text-2xl font-bold">
+                        {% widthratio summary.total_income|default:0 1 1 %}₮
+                    </p>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-full p-3">
+                    <i class="fas fa-wallet text-xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-calendar mr-1"></i>Сар
+                </label>
+                <select name="month" onchange="this.form.submit()"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">Бүгд</option>
+                    {% for month in months %}
+                    <option value="{{ month|date:'Y-m' }}" {% if selected_month == month|date:'Y-m' %}selected{% endif %}>
+                        {{ month|date:"Y оны m сар" }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-exchange-alt mr-1"></i>Төрөл
+                </label>
+                <select name="type" onchange="this.form.submit()"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">Бүгд</option>
+                    <option value="income" {% if selected_type == 'income' %}selected{% endif %}>Орлого</option>
+                    <option value="expense" {% if selected_type == 'expense' %}selected{% endif %}>Зардал</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-info-circle mr-1"></i>Төлөв
+                </label>
+                <select name="status" onchange="this.form.submit()"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">Бүгд</option>
+                    {% for status_value, status_label in status_choices %}
+                    <option value="{{ status_value }}" {% if selected_status == status_value %}selected{% endif %}>
+                        {{ status_label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" 
+                    class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                <i class="fas fa-filter mr-2"></i>Шүүх
+            </button>
+            {% if selected_status %}
+            <a href="{% url 'bank_transaction_list' %}" 
+               class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
+                <i class="fas fa-times mr-2"></i>Цэвэрлэх
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Transactions Table -->
+    {% if transactions %}
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                    <tr>
+                        <th class="py-4 px-6 text-left font-semibold">Огноо</th>
+                        <th class="py-4 px-6 text-center font-semibold">Төрөл</th>
+                        <th class="py-4 px-6 text-right font-semibold">Дүн</th>
+                        <th class="py-4 px-6 text-left font-semibold">Харьцсан данс</th>
+                        <th class="py-4 px-6 text-left font-semibold">Утга</th>
+                        <th class="py-4 px-6 text-center font-semibold">Төлөв</th>
+                        <th class="py-4 px-6 text-right font-semibold">Хуваарилсан</th>
+                        <th class="py-4 px-6 text-right font-semibold">Үлдсэн</th>
+                        <th class="py-4 px-6 text-center font-semibold">Үйлдэл</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for transaction in transactions %}
+                    <tr class="hover:bg-blue-50 transition-colors">
+                        <td class="py-4 px-6">
+                            <span class="text-gray-800 font-medium">
+                                {{ transaction.transaction_date|date:"Y-m-d" }}
+                            </span>
+                        </td>
+                        <td class="py-4 px-6 text-center">
+                            {% if transaction.credit_amount and transaction.credit_amount > 0 %}
+                            <span class="inline-block px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
+                                <i class="fas fa-arrow-down mr-1"></i>Орлого
+                            </span>
+                            {% elif transaction.debit_amount and transaction.debit_amount != 0 %}
+                            <span class="inline-block px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold">
+                                <i class="fas fa-arrow-up mr-1"></i>Зардал
+                            </span>
+                            {% else %}
+                            <span class="inline-block px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-semibold">
+                                <i class="fas fa-minus mr-1"></i>—
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-6 text-right">
+                            {% if transaction.credit_amount and transaction.credit_amount > 0 %}
+                            <span class="text-lg font-bold text-green-600">
+                                +{{ transaction.credit_amount|floatformat:0 }}₮
+                            </span>
+                            {% elif transaction.debit_amount and transaction.debit_amount != 0 %}
+                            <span class="text-lg font-bold text-red-600">
+                                {{ transaction.debit_amount|floatformat:0 }}₮
+                            </span>
+                            {% else %}
+                            <span class="text-lg font-bold text-gray-400">
+                                0₮
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-6">
+                            <span class="text-gray-700 text-sm">
+                                {{ transaction.counterparty_account|default:"—"|truncatewords:5 }}
+                            </span>
+                        </td>
+                        <td class="py-4 px-6">
+                            <span class="text-gray-600 text-sm">
+                                {{ transaction.description|truncatewords:10 }}
+                            </span>
+                        </td>
+                        <td class="py-4 px-6 text-center">
+                            {% if transaction.status == 'PENDING' %}
+                            <span class="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">
+                                <i class="fas fa-clock mr-1"></i>Хүлээгдэж буй
+                            </span>
+                            {% elif transaction.status == 'MATCHED' %}
+                            <span class="inline-block px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
+                                <i class="fas fa-check mr-1"></i>Холбогдсон
+                            </span>
+                            {% elif transaction.status == 'PARTIALLY_MATCHED' %}
+                            <span class="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+                                <i class="fas fa-adjust mr-1"></i>Хэсэгчлэн
+                            </span>
+                            {% else %}
+                            <span class="inline-block px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-semibold">
+                                <i class="fas fa-ban mr-1"></i>Орхигдсон
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-6 text-right">
+                            <span class="text-gray-700 font-medium">
+                                {{ transaction.get_allocated_amount|floatformat:0 }}₮
+                            </span>
+                        </td>
+                        <td class="py-4 px-6 text-right">
+                            <span class="text-orange-600 font-bold">
+                                {{ transaction.get_remaining_amount|floatformat:0 }}₮
+                            </span>
+                        </td>
+                        <td class="py-4 px-6 text-center">
+                            <a href="{% url 'bank_transaction_match' transaction.id %}" 
+                               class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                                <i class="fas fa-link mr-2"></i>Холбох
+                            </a>
+                        </td>
+                    </tr>
+                    
+                    <!-- Show allocations if any -->
+                    {% if transaction.allocations.all or transaction.expense_allocations.all %}
+                    <tr class="bg-gray-50">
+                        <td colspan="9" class="py-3 px-6">
+                            <div class="text-sm">
+                                <span class="font-semibold text-gray-700">Хуваарилалт:</span>
+                                <div class="mt-2 space-y-1">
+                                    {% for allocation in transaction.allocations.all %}
+                                    <div class="flex items-center gap-4 text-gray-600">
+                                        <i class="fas fa-user-circle text-green-500"></i>
+                                        <span class="font-medium">{{ allocation.student }}</span>
+                                        <span class="text-gray-500">→</span>
+                                        <span>{{ allocation.payment_month|date:"Y-m" }}</span>
+                                        <span class="text-gray-500">→</span>
+                                        <span class="font-bold text-green-600">{{ allocation.amount|floatformat:0 }}₮</span>
+                                        {% if allocation.notes %}
+                                        <span class="text-gray-400 text-xs">{{ allocation.notes }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
+                                    {% for allocation in transaction.expense_allocations.all %}
+                                    <div class="flex items-center gap-4 text-gray-600">
+                                        <i class="fas fa-receipt text-red-500"></i>
+                                        <span class="font-medium">{{ allocation.expense_category }}</span>
+                                        <span class="text-gray-500">→</span>
+                                        <span>{{ allocation.expense_date|date:"Y-m-d" }}</span>
+                                        <span class="text-gray-500">→</span>
+                                        <span class="font-bold text-red-600">{{ allocation.amount|floatformat:0 }}₮</span>
+                                        {% if allocation.notes %}
+                                        <span class="text-gray-400 text-xs">{{ allocation.notes }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="bg-white rounded-b-lg shadow-md px-6 py-4 border-t border-gray-200">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <!-- Page Info -->
+                <div class="text-sm text-gray-600">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Нийт <span class="font-semibold">{{ page_obj.paginator.count }}</span> гүйлгээнээс
+                    <span class="font-semibold">{{ page_obj.start_index }}</span>-
+                    <span class="font-semibold">{{ page_obj.end_index }}</span>
+                </div>
+                
+                <!-- Page Numbers -->
+                <div class="flex items-center gap-2">
+                    {% if page_obj.has_previous %}
+                    <a href="?page=1{% if selected_month %}&month={{ selected_month }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}"
+                       class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                    <a href="?page={{ page_obj.previous_page_number }}{% if selected_month %}&month={{ selected_month }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}"
+                       class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
+                        <i class="fas fa-angle-left"></i> Өмнөх
+                    </a>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <span class="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm">
+                            {{ num }}
+                        </span>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <a href="?page={{ num }}{% if selected_month %}&month={{ selected_month }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}"
+                           class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
+                            {{ num }}
+                        </a>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if selected_month %}&month={{ selected_month }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}"
+                       class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
+                        Дараах <i class="fas fa-angle-right"></i>
+                    </a>
+                    <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_month %}&month={{ selected_month }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}"
+                       class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="py-16 text-center bg-white rounded-lg shadow-lg">
+        <div class="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-university text-4xl text-gray-400"></i>
+        </div>
+        <h3 class="text-xl font-bold text-gray-700 mb-2">Банкны гүйлгээ олдсонгүй</h3>
+        <p class="text-gray-500 mb-6">Excel файл импортлоно уу</p>
+        <a href="{% url 'bank_transaction_upload' %}" 
+           class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700">
+            <i class="fas fa-upload mr-2"></i>Excel импортлох
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

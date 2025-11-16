@@ -1,0 +1,223 @@
+{% extends 'aikido_app/base.html' %}
+{% load static %}
+
+{% block title %}Excel импортлох{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">
+            <i class="fas fa-file-excel mr-2 text-green-600"></i>Банкны гүйлгээ импортлох
+        </h1>
+        <p class="text-gray-600">Excel файлаас банкны гүйлгээний мэдээлэл уншина</p>
+    </div>
+
+    <!-- Instructions -->
+    <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4 mb-6">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-info-circle text-blue-500 text-xl"></i>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">Зааварчилгаа</h3>
+                <div class="mt-2 text-sm text-blue-700">
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>Банкнаас татаж авсан Excel файл (.xlsx, .xls) сонгоно</li>
+                        <li><strong>Стандарт формат:</strong> Толгой мөрөөс автоматаар баганууд олно</li>
+                        <li><strong>Өөрийн тохиргоо:</strong> Баганы үсгийг гараар оруулна</li>
+                        <li>Зөвхөн <strong>Кредит гүйлгээ</strong> (орлого) импортлогдоно</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Form -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <!-- File Upload -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-file-upload mr-2"></i>Excel файл
+                </label>
+                {{ form.excel_file }}
+                {% if form.excel_file.help_text %}
+                <p class="mt-1 text-sm text-gray-500">{{ form.excel_file.help_text }}</p>
+                {% endif %}
+                {% if form.excel_file.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ form.excel_file.errors }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Format Selection -->
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                <label class="block text-sm font-medium text-gray-700 mb-3">
+                    <i class="fas fa-cog mr-2"></i>Файлын формат
+                </label>
+                <div class="space-y-2">
+                    {% for value, label in form.bank_format.field.choices %}
+                    <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-white transition-colors">
+                        <input type="radio" name="bank_format" value="{{ value }}" 
+                               {% if form.bank_format.value == value or value == 'standard' %}checked{% endif %}
+                               onchange="toggleFormatFields(this.value)"
+                               class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                        <span class="ml-3 text-gray-700 font-medium">{{ label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Header-based fields (mongol_bank) -->
+            <div id="header-fields" class="space-y-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">
+                    <i class="fas fa-table mr-2"></i>Баганы толгой нэрс
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ form.date_header.label }}</label>
+                        {{ form.date_header }}
+                        <p class="mt-1 text-xs text-gray-500">{{ form.date_header.help_text }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ form.amount_header.label }}</label>
+                        {{ form.amount_header }}
+                        <p class="mt-1 text-xs text-gray-500">{{ form.amount_header.help_text }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ form.description_header.label }}</label>
+                        {{ form.description_header }}
+                        <p class="mt-1 text-xs text-gray-500">{{ form.description_header.help_text }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ form.payer_header.label }}</label>
+                        {{ form.payer_header }}
+                        <p class="mt-1 text-xs text-gray-500">{{ form.payer_header.help_text }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual column fields (custom) -->
+            <div id="column-fields" class="space-y-4 mb-6" style="display: none;">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">
+                    <i class="fas fa-columns mr-2"></i>Баганы үсэг
+                </h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ form.date_column.label }}</label>
+                        {{ form.date_column }}
+                        <p class="mt-1 text-xs text-gray-500">{{ form.date_column.help_text }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ form.amount_column.label }}</label>
+                        {{ form.amount_column }}
+                        <p class="mt-1 text-xs text-gray-500">{{ form.amount_column.help_text }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ form.description_column.label }}</label>
+                        {{ form.description_column }}
+                        <p class="mt-1 text-xs text-gray-500">{{ form.description_column.help_text }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ form.payer_name_column.label }}</label>
+                        {{ form.payer_name_column }}
+                        <p class="mt-1 text-xs text-gray-500">{{ form.payer_name_column.help_text }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Start Row -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-list-ol mr-2"></i>{{ form.start_row.label }}
+                </label>
+                {{ form.start_row }}
+                <p class="mt-1 text-sm text-gray-500">{{ form.start_row.help_text }}</p>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-4">
+                <button type="submit" 
+                        class="flex-1 inline-flex justify-center items-center px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white font-semibold rounded-lg shadow-lg hover:from-green-700 hover:to-blue-700 transition-all">
+                    <i class="fas fa-upload mr-2"></i>Импортлох
+                </button>
+                <a href="{% url 'bank_transaction_list' %}" 
+                   class="inline-flex justify-center items-center px-6 py-3 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-all">
+                    <i class="fas fa-times mr-2"></i>Болих
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Example -->
+    <div class="mt-6 bg-gray-50 rounded-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-lightbulb mr-2 text-yellow-500"></i>Жишээ Excel формат
+        </h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white border border-gray-300 text-sm">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="py-2 px-4 border-b text-left">Гүйлгээний огноо</th>
+                        <th class="py-2 px-4 border-b text-right">Эхний үлдэгдэл</th>
+                        <th class="py-2 px-4 border-b text-right">Дебит гүйлгээ</th>
+                        <th class="py-2 px-4 border-b text-right">Кредит гүйлгээ</th>
+                        <th class="py-2 px-4 border-b text-right">Эцсийн үлдэгдэл</th>
+                        <th class="py-2 px-4 border-b text-left">Гүйлгээний утга</th>
+                        <th class="py-2 px-4 border-b text-left">Харьцсан данс</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="py-2 px-4 border-b">2024-11-01</td>
+                        <td class="py-2 px-4 border-b text-right">1,000,000</td>
+                        <td class="py-2 px-4 border-b text-right">-</td>
+                        <td class="py-2 px-4 border-b text-right text-green-600 font-semibold">50,000</td>
+                        <td class="py-2 px-4 border-b text-right">1,050,000</td>
+                        <td class="py-2 px-4 border-b">Сургалтын төлбөр</td>
+                        <td class="py-2 px-4 border-b">1234567890 / Б.Баяр</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 px-4 border-b">2024-11-05</td>
+                        <td class="py-2 px-4 border-b text-right">1,050,000</td>
+                        <td class="py-2 px-4 border-b text-right">-</td>
+                        <td class="py-2 px-4 border-b text-right text-green-600 font-semibold">100,000</td>
+                        <td class="py-2 px-4 border-b text-right">1,150,000</td>
+                        <td class="py-2 px-4 border-b">Айкидо төлбөр</td>
+                        <td class="py-2 px-4 border-b">9876543210 / Д.Дорж</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="mt-4 text-sm text-gray-600">
+            <i class="fas fa-check-circle text-green-500 mr-1"></i>
+            Зөвхөн <strong>Кредит гүйлгээ</strong> (орлого) баганд дүн байгаа мөрүүд импортлогдоно
+        </p>
+    </div>
+</div>
+
+<script>
+function toggleFormatFields(format) {
+    const headerFields = document.getElementById('header-fields');
+    const columnFields = document.getElementById('column-fields');
+    
+    if (format === 'standard') {
+        headerFields.style.display = 'block';
+        columnFields.style.display = 'none';
+    } else {
+        headerFields.style.display = 'none';
+        columnFields.style.display = 'block';
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const selectedFormat = document.querySelector('input[name="bank_format"]:checked');
+    if (selectedFormat) {
+        toggleFormatFields(selectedFormat.value);
+    }
+});
+</script>
+{% endblock %}

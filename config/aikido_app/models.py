@@ -397,6 +397,15 @@ class Payment(models.Model):
         default=False,
         verbose_name="Баталгаажсан эсэх"
     )
+    # Link to bank transaction if imported
+    bank_transaction = models.ForeignKey(
+        'BankTransaction',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='linked_payments',
+        verbose_name="Банкны гүйлгээ"
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Шинэчилсэн огноо")
     
@@ -465,3 +474,230 @@ class RankHistory(models.Model):
         person = self.student or self.instructor
         rank_display = f"{self.rank_number} {self.get_rank_type_display()}"
         return f"{person} - {rank_display} ({self.obtained_date})"
+
+
+class BankTransaction(models.Model):
+    """Банкны гүйлгээний бичлэг - Excel файлаас импортлосон"""
+    
+    STATUS_PENDING = 'PENDING'
+    STATUS_MATCHED = 'MATCHED'
+    STATUS_PARTIALLY_MATCHED = 'PARTIALLY_MATCHED'
+    STATUS_IGNORED = 'IGNORED'
+    
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Хүлээгдэж буй'),
+        (STATUS_MATCHED, 'Холбогдсон'),
+        (STATUS_PARTIALLY_MATCHED, 'Хэсэгчлэн холбогдсон'),
+        (STATUS_IGNORED, 'Орхигдсон'),
+    ]
+    
+    transaction_date = models.DateField(verbose_name="Гүйлгээний огноо")
+    opening_balance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Эхний үлдэгдэл"
+    )
+    debit_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Дебит гүйлгээ"
+    )
+    credit_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Кредит гүйлгээ"
+    )
+    closing_balance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Эцсийн үлдэгдэл"
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name="Дүн (кредит)",
+        help_text="Кредит гүйлгээний дүн"
+    )
+    description = models.TextField(verbose_name="Гүйлгээний утга")
+    counterparty_account = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name="Харьцсан данс"
+    )
+    reference_number = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Лавлагааны дугаар"
+    )
+    payer_name = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Төлөгчийн нэр"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        verbose_name="Төлөв"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Тэмдэглэл"
+    )
+    imported_at = models.DateTimeField(auto_now_add=True, verbose_name="Импортлосон огноо")
+    
+    class Meta:
+        verbose_name = "Банкны гүйлгээ"
+        verbose_name_plural = "Банкны гүйлгээнүүд"
+        ordering = ['-transaction_date', '-imported_at']
+    
+    def __str__(self):
+        return f"{self.transaction_date} - {self.amount}₮ - {self.payer_name or 'Тодорхойгүй'}"
+    
+    def get_allocated_amount(self):
+        """Хуваарилагдсан нийт дүн (орлого эсвэл зардал)"""
+        # Кредит гүйлгээ бол PaymentAllocation-оос
+        if self.credit_amount and self.credit_amount > 0:
+            return self.allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+        # Дебит гүйлгээ бол ExpenseAllocation-оос
+        elif self.debit_amount and self.debit_amount != 0:
+            return self.expense_allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+        return Decimal('0.00')
+    
+    def get_remaining_amount(self):
+        """Үлдсэн дүн"""
+        return self.amount - self.get_allocated_amount()
+    
+    def update_status(self):
+        """Төлөвийг автоматаар шинэчлэх"""
+        allocated = self.get_allocated_amount()
+        if allocated == Decimal('0.00'):
+            self.status = self.STATUS_PENDING
+        elif allocated >= self.amount:
+            self.status = self.STATUS_MATCHED
+        else:
+            self.status = self.STATUS_PARTIALLY_MATCHED
+        self.save()
+
+
+class PaymentAllocation(models.Model):
+    """Төлбөрийн хуваарилалт - Банкны гүйлгээг сурагч + сартай холбох"""
+    
+    bank_transaction = models.ForeignKey(
+        BankTransaction,
+        on_delete=models.CASCADE,
+        related_name='allocations',
+        verbose_name="Банкны гүйлгээ"
+    )
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name='payment_allocations',
+        verbose_name="Сурагч"
+    )
+    payment_month = models.DateField(verbose_name="Төлбөрийн сар")
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name="Дүн"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Тэмдэглэл"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    created_by = models.ForeignKey(
+        Instructor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Үүсгэсэн хэрэглэгч"
+    )
+    
+    class Meta:
+        verbose_name = "Төлбөрийн хуваарилалт"
+        verbose_name_plural = "Төлбөрийн хуваарилалтууд"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.student} - {self.payment_month.strftime('%Y-%m')} - {self.amount}₮"
+
+
+class ExpenseCategory(models.Model):
+    """Зардлын төрөл/ангилал"""
+    
+    name = models.CharField(
+        max_length=200,
+        unique=True,
+        verbose_name="Нэр"
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name="Тайлбар"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    
+    class Meta:
+        verbose_name = "Зардлын ангилал"
+        verbose_name_plural = "Зардлын ангиллууд"
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.name
+
+
+class ExpenseAllocation(models.Model):
+    """Зардлын хуваарилалт - Банкны гүйлгээг зардлын ангилалтай холбох"""
+    
+    bank_transaction = models.ForeignKey(
+        BankTransaction,
+        on_delete=models.CASCADE,
+        related_name='expense_allocations',
+        verbose_name="Банкны гүйлгээ"
+    )
+    expense_category = models.ForeignKey(
+        ExpenseCategory,
+        on_delete=models.PROTECT,
+        related_name='allocations',
+        verbose_name="Зардлын ангилал"
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name="Дүн"
+    )
+    expense_date = models.DateField(
+        verbose_name="Зардлын огноо",
+        help_text="Зардал гарсан огноо"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Тэмдэглэл"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    created_by = models.ForeignKey(
+        Instructor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Үүсгэсэн хэрэглэгч"
+    )
+    
+    class Meta:
+        verbose_name = "Зардлын хуваарилалт"
+        verbose_name_plural = "Зардлын хуваарилалтууд"
+        ordering = ['-expense_date', '-created_at']
+    
+    def __str__(self):
+        return f"{self.expense_category} - {self.expense_date} - {self.amount}₮"

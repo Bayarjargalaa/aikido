@@ -1,0 +1,474 @@
+{% extends 'aikido_app/base.html' %}
+{% load static %}
+
+{% block title %}Гүйлгээ холбох{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">
+            <i class="fas fa-link mr-2 text-blue-600"></i>Банкны гүйлгээг сурагчтай холбох
+        </h1>
+        <p class="text-gray-600">Төлбөрийг сурагч болон сарт хуваарилна</p>
+    </div>
+
+    <!-- Transaction Info -->
+    <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg shadow-lg p-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div>
+                <p class="text-blue-100 text-sm mb-1">Огноо</p>
+                <p class="text-2xl font-bold">{{ transaction.transaction_date|date:"Y-m-d" }}</p>
+            </div>
+            <div>
+                <p class="text-blue-100 text-sm mb-1">Төрөл</p>
+                {% if transaction.credit_amount and transaction.credit_amount > 0 %}
+                <p class="text-2xl font-bold">
+                    <i class="fas fa-arrow-down mr-2"></i>Орлого
+                </p>
+                {% elif transaction.debit_amount and transaction.debit_amount != 0 %}
+                <p class="text-2xl font-bold">
+                    <i class="fas fa-arrow-up mr-2"></i>Зардал
+                </p>
+                {% else %}
+                <p class="text-2xl font-bold text-gray-300">—</p>
+                {% endif %}
+            </div>
+            <div>
+                <p class="text-blue-100 text-sm mb-1">Нийт дүн</p>
+                {% if transaction.credit_amount and transaction.credit_amount > 0 %}
+                <p class="text-3xl font-bold text-green-300">+{{ transaction.credit_amount|floatformat:0 }}₮</p>
+                {% elif transaction.debit_amount and transaction.debit_amount != 0 %}
+                <p class="text-3xl font-bold text-red-300">{{ transaction.debit_amount|floatformat:0 }}₮</p>
+                {% else %}
+                <p class="text-3xl font-bold">{{ transaction.amount|floatformat:0 }}₮</p>
+                {% endif %}
+            </div>
+            <div>
+                <p class="text-blue-100 text-sm mb-1">Үлдсэн дүн</p>
+                <p class="text-3xl font-bold text-yellow-300" id="remaining-amount">
+                    {{ remaining_amount|floatformat:0 }}₮
+                </p>
+            </div>
+        </div>
+        {% if transaction.counterparty_account %}
+        <div class="mt-4 pt-4 border-t border-blue-400">
+            <p class="text-blue-100 text-sm mb-1">Харьцсан данс</p>
+            <p class="text-lg font-semibold">{{ transaction.counterparty_account }}</p>
+        </div>
+        {% endif %}
+        {% if transaction.description %}
+        <div class="mt-2">
+            <p class="text-blue-100 text-sm mb-1">Гүйлгээний утга</p>
+            <p class="text-sm">{{ transaction.description }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Existing Allocations -->
+    {% if is_income and allocations %}
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-list mr-2 text-green-600"></i>Одоо байгаа орлогын хуваарилалт
+        </h2>
+        <div class="space-y-3">
+            {% for allocation in allocations %}
+            <div class="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
+                <div class="flex items-center gap-4">
+                    <i class="fas fa-user-circle text-green-600 text-2xl"></i>
+                    <div>
+                        <p class="font-semibold text-gray-800">{{ allocation.student }}</p>
+                        <p class="text-sm text-gray-600">{{ allocation.payment_month|date:"Y оны m сар" }}</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-2xl font-bold text-green-600">{{ allocation.amount|floatformat:0 }}₮</p>
+                    {% if allocation.notes %}
+                    <p class="text-xs text-gray-500">{{ allocation.notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% elif is_expense and expense_allocations %}
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-list mr-2 text-red-600"></i>Одоо байгаа зардлын хуваарилалт
+        </h2>
+        <div class="space-y-3">
+            {% for allocation in expense_allocations %}
+            <div class="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
+                <div class="flex items-center gap-4">
+                    <i class="fas fa-receipt text-red-600 text-2xl"></i>
+                    <div>
+                        <p class="font-semibold text-gray-800">{{ allocation.expense_category }}</p>
+                        <p class="text-sm text-gray-600">{{ allocation.expense_date|date:"Y-m-d" }}</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-2xl font-bold text-red-600">{{ allocation.amount|floatformat:0 }}₮</p>
+                    {% if allocation.notes %}
+                    <p class="text-xs text-gray-500">{{ allocation.notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Add New Allocations -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-plus-circle mr-2 text-blue-600"></i>
+            {% if is_income %}Шинэ орлогын хуваарилалт нэмэх{% else %}Шинэ зардлын хуваарилалт нэмэх{% endif %}
+        </h2>
+        
+        <form method="post" id="allocation-form">
+            {% csrf_token %}
+            
+            {% if is_income %}
+            <!-- Income (Payment) Allocation Form -->
+            <div id="allocation-rows" class="space-y-4 mb-6">
+                <!-- Initial row -->
+                <div class="allocation-row grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-user mr-1"></i>Сурагч
+                        </label>
+                        <select name="student_id[]" required
+                                class="student-select w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Сонгох --</option>
+                            {% for student in students %}
+                            <option value="{{ student.id }}" data-monthly-fee="{{ student.monthly_fee }}">
+                                {{ student.last_name }} {{ student.first_name }}
+                                {% if student.monthly_fee %}
+                                ({{ student.monthly_fee|floatformat:0 }}₮/сар)
+                                {% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-calendar mr-1"></i>Сар
+                        </label>
+                        <input type="month" name="payment_month[]" required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-money-bill mr-1"></i>Дүн (₮)
+                        </label>
+                        <input type="number" name="amount[]" step="0.01" required
+                               class="amount-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                               placeholder="0">
+                    </div>
+                    <div class="flex items-end">
+                        <button type="button" onclick="removeRow(this)" 
+                                class="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="md:col-span-5">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-comment mr-1"></i>Тайлбар (заавал биш)
+                        </label>
+                        <input type="text" name="notes[]"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                               placeholder="Тайлбар бичих...">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Row Button -->
+            <button type="button" onclick="addRow()" 
+                    class="w-full py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 border-2 border-dashed border-blue-300 mb-6">
+                <i class="fas fa-plus-circle mr-2"></i>Мөр нэмэх
+            </button>
+
+            <!-- Quick Fill Section -->
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded">
+                <h3 class="text-sm font-semibold text-yellow-800 mb-3">
+                    <i class="fas fa-magic mr-2"></i>Олон сар автоматаар нөхөх
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs text-gray-700 mb-1">Сурагч сонгох</label>
+                        <select id="quick-student" class="w-full px-3 py-2 border rounded text-sm">
+                            <option value="">-- Сонгох --</option>
+                            {% for student in students %}
+                            <option value="{{ student.id }}" data-monthly-fee="{{ student.monthly_fee }}">
+                                {{ student.last_name }} {{ student.first_name }}.
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-700 mb-1">Хэдэн сар?</label>
+                        <input type="number" id="quick-months" min="1" max="12" value="1" 
+                               class="w-full px-3 py-2 border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-700 mb-1">Эхлэх сар</label>
+                        <input type="month" id="quick-start-month" 
+                               class="w-full px-3 py-2 border rounded text-sm">
+                    </div>
+                    <div class="flex items-end">
+                        <button type="button" onclick="quickFill()" 
+                                class="w-full px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm">
+                            <i class="fas fa-bolt mr-1"></i>Нөхөх
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            {% elif is_expense %}
+            <!-- Expense Allocation Form -->
+            <div id="expense-rows" class="space-y-4 mb-6">
+                <!-- Initial row -->
+                <div class="expense-row grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-tag mr-1"></i>Зардлын ангилал
+                        </label>
+                        <select name="expense_category[]" 
+                                class="category-select w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Одоо байгаа ангилал --</option>
+                            {% for category in expense_categories %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="text" name="new_category[]" 
+                               class="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                               placeholder="Эсвэл шинэ ангилал үүсгэх...">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-calendar mr-1"></i>Огноо
+                        </label>
+                        <input type="date" name="expense_date[]" required value="{{ transaction.transaction_date|date:'Y-m-d' }}"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-money-bill mr-1"></i>Дүн (₮)
+                        </label>
+                        <input type="number" name="amount[]" step="0.01" required
+                               class="amount-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                               placeholder="0">
+                    </div>
+                    <div class="flex items-end">
+                        <button type="button" onclick="removeExpenseRow(this)" 
+                                class="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="md:col-span-5">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-comment mr-1"></i>Тайлбар (заавал биш)
+                        </label>
+                        <input type="text" name="notes[]"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                               placeholder="Тайлбар бичих...">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Row Button for Expense -->
+            <button type="button" onclick="addExpenseRow()" 
+                    class="w-full py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 border-2 border-dashed border-blue-300 mb-6">
+                <i class="fas fa-plus-circle mr-2"></i>Мөр нэмэх
+            </button>
+            {% endif %}
+
+            <!-- Actions -->
+            <div class="flex gap-4">
+                <button type="submit" 
+                        class="flex-1 inline-flex justify-center items-center px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white font-semibold rounded-lg shadow-lg hover:from-green-700 hover:to-blue-700 transition-all">
+                    <i class="fas fa-save mr-2"></i>Хадгалах
+                </button>
+                <a href="{% url 'bank_transaction_list' %}" 
+                   class="inline-flex justify-center items-center px-6 py-3 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-all">
+                    <i class="fas fa-times mr-2"></i>Болих
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const transactionAmount = {{ transaction.amount }};
+const allocatedAmount = {{ transaction.get_allocated_amount }};
+
+function addRow() {
+    const container = document.getElementById('allocation-rows');
+    const firstRow = container.querySelector('.allocation-row');
+    const newRow = firstRow.cloneNode(true);
+    
+    // Clear values
+    newRow.querySelectorAll('input, select').forEach(input => {
+        if (input.type === 'number') {
+            input.value = '';
+        } else if (input.tagName === 'SELECT') {
+            input.selectedIndex = 0;
+        } else {
+            input.value = '';
+        }
+    });
+    
+    container.appendChild(newRow);
+    updateRemainingAmount();
+}
+
+function removeRow(button) {
+    const container = document.getElementById('allocation-rows');
+    if (container.querySelectorAll('.allocation-row').length > 1) {
+        button.closest('.allocation-row').remove();
+        updateRemainingAmount();
+    } else {
+        alert('Хамгийн багадаа 1 мөр байх ёстой');
+    }
+}
+
+function updateRemainingAmount() {
+    let total = allocatedAmount;
+    document.querySelectorAll('.amount-input').forEach(input => {
+        const value = parseFloat(input.value) || 0;
+        total += value;
+    });
+    
+    const remaining = transactionAmount - total;
+    document.getElementById('remaining-amount').textContent = remaining.toFixed(0) + '₮';
+    
+    if (remaining < 0) {
+        document.getElementById('remaining-amount').classList.add('text-red-500');
+        document.getElementById('remaining-amount').classList.remove('text-yellow-300');
+    } else {
+        document.getElementById('remaining-amount').classList.remove('text-red-500');
+        document.getElementById('remaining-amount').classList.add('text-yellow-300');
+    }
+}
+
+// Update remaining on amount change
+document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('amount-input')) {
+        updateRemainingAmount();
+    }
+});
+
+// Auto-fill monthly fee when student is selected
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('student-select')) {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const monthlyFee = selectedOption.dataset.monthlyFee;
+        if (monthlyFee) {
+            const row = e.target.closest('.allocation-row');
+            const amountInput = row.querySelector('.amount-input');
+            if (!amountInput.value) {
+                amountInput.value = monthlyFee;
+                updateRemainingAmount();
+            }
+        }
+    }
+});
+
+// Quick fill multiple months
+function quickFill() {
+    const studentId = document.getElementById('quick-student').value;
+    const months = parseInt(document.getElementById('quick-months').value) || 1;
+    const startMonth = document.getElementById('quick-start-month').value;
+    
+    if (!studentId || !startMonth) {
+        alert('Сурагч болон эхлэх сарыг сонгоно уу');
+        return;
+    }
+    
+    const studentSelect = document.getElementById('quick-student');
+    const selectedOption = studentSelect.options[studentSelect.selectedIndex];
+    const monthlyFee = selectedOption.dataset.monthlyFee || 0;
+    
+    // Parse start month
+    const [year, month] = startMonth.split('-').map(Number);
+    
+    // Clear existing rows except first
+    const container = document.getElementById('allocation-rows');
+    const rows = container.querySelectorAll('.allocation-row');
+    for (let i = rows.length - 1; i > 0; i--) {
+        rows[i].remove();
+    }
+    
+    // Fill rows
+    for (let i = 0; i < months; i++) {
+        const currentDate = new Date(year, month - 1 + i, 1);
+        const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (i === 0) {
+            // Use first row
+            const firstRow = container.querySelector('.allocation-row');
+            firstRow.querySelector('.student-select').value = studentId;
+            firstRow.querySelector('input[type="month"]').value = currentMonth;
+            firstRow.querySelector('.amount-input').value = monthlyFee;
+        } else {
+            // Add new row
+            addRow();
+            const lastRow = container.lastElementChild;
+            lastRow.querySelector('.student-select').value = studentId;
+            lastRow.querySelector('input[type="month"]').value = currentMonth;
+            lastRow.querySelector('.amount-input').value = monthlyFee;
+        }
+    }
+    
+    updateRemainingAmount();
+}
+
+// Set default start month to current month
+document.getElementById('quick-start-month').value = new Date().toISOString().slice(0, 7);
+
+// Form validation
+document.getElementById('allocation-form').addEventListener('submit', function(e) {
+    let total = allocatedAmount;
+    document.querySelectorAll('.amount-input').forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+    
+    if (total > transactionAmount) {
+        if (!confirm(`Хуваарилсан дүн (${total.toFixed(0)}₮) нийт дүнгээс (${transactionAmount.toFixed(0)}₮) их байна. Үргэлжлүүлэх үү?`)) {
+            e.preventDefault();
+        }
+    }
+});
+
+// Expense allocation functions
+function addExpenseRow() {
+    const container = document.getElementById('expense-rows');
+    const firstRow = container.querySelector('.expense-row');
+    const newRow = firstRow.cloneNode(true);
+    
+    // Clear values
+    newRow.querySelectorAll('input, select').forEach(input => {
+        if (input.type === 'number') {
+            input.value = '';
+        } else if (input.type === 'text') {
+            input.value = '';
+        } else if (input.tagName === 'SELECT') {
+            input.selectedIndex = 0;
+        } else if (input.type === 'date') {
+            // Keep default date
+        }
+    });
+    
+    container.appendChild(newRow);
+}
+
+function removeExpenseRow(button) {
+    const container = document.getElementById('expense-rows');
+    if (container.querySelectorAll('.expense-row').length > 1) {
+        button.closest('.expense-row').remove();
+    } else {
+        alert('Хамгийн багадаа 1 мөр байх ёстой');
+    }
+}
+</script>
+{% endblock %}

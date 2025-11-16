@@ -22,4 +22,9 @@ urlpatterns = [
     path('attendance/record/', views.attendance_record, name='attendance_record'),
     path('attendance/assign-instructors/', views.assign_instructors, name='assign_instructors'),
     path('payments/', views.payment_list, name='payment_list'),
+    
+    # Bank transactions
+    path('bank-transactions/', views.bank_transaction_list, name='bank_transaction_list'),
+    path('bank-transactions/upload/', views.bank_transaction_upload, name='bank_transaction_upload'),
+    path('bank-transactions/<int:transaction_id>/match/', views.bank_transaction_match, name='bank_transaction_match'),
 ]

@@ -169,6 +169,29 @@
                     </td>
                 </tr>
                 {% endfor %}
+                <!-- Date Totals Row -->
+                <tr class="bg-gradient-to-r from-purple-50 to-blue-50 font-bold border-t-2 border-purple-300">
+                    <td class="py-4 px-6 text-gray-700 sticky left-0 bg-gradient-to-r from-purple-50 to-blue-50 z-10" colspan="2">
+                        <div class="flex items-center">
+                            <i class="fas fa-calculator mr-2 text-purple-600"></i>
+                            <span>Огноогоор нийлбэр</span>
+                        </div>
+                    </td>
+                    {% for date in dates %}
+                    <td class="py-4 px-6 text-center">
+                        <span class="inline-flex items-center justify-center w-10 h-10 bg-purple-100 text-purple-800 rounded-full font-bold text-sm" 
+                              id="date-total-{{ date.date|date:'Y-m-d' }}">
+                            0
+                        </span>
+                    </td>
+                    {% endfor %}
+                    <td class="py-4 px-6 text-center sticky right-0 bg-gradient-to-r from-purple-50 to-blue-50 z-10">
+                        <span class="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-purple-600 to-blue-600 text-white rounded-full font-bold text-lg" 
+                              id="grand-total">
+                            0
+                        </span>
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -393,12 +416,83 @@
 
 {% block extra_js %}
 <script>
-    // Update totals when checkbox changes
+    // Function to update all totals (row totals and date totals)
+    function updateAllTotals() {
+        // Update row totals (each student)
+        document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
+            const studentId = checkbox.dataset.studentId;
+            const total = document.querySelectorAll(`input[data-student-id="${studentId}"]:checked`).length;
+            const totalElement = document.getElementById(`total-${studentId}`);
+            if (totalElement) {
+                totalElement.textContent = total;
+            }
+        });
+        
+        // Update date totals (each column)
+        const dates = [...new Set([...document.querySelectorAll('.attendance-checkbox')].map(cb => cb.dataset.date))];
+        dates.forEach(date => {
+            const dateTotal = document.querySelectorAll(`input[data-date="${date}"]:checked`).length;
+            const dateTotalElement = document.getElementById(`date-total-${date}`);
+            if (dateTotalElement) {
+                dateTotalElement.textContent = dateTotal;
+            }
+        });
+        
+        // Update grand total
+        const grandTotal = document.querySelectorAll('.attendance-checkbox:checked').length;
+        const grandTotalElement = document.getElementById('grand-total');
+        if (grandTotalElement) {
+            grandTotalElement.textContent = grandTotal;
+        }
+    }
+    
+    // Initialize totals on page load
+    updateAllTotals();
+
+    // Update totals and save when checkboxes change
     document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', function() {
             const studentId = this.dataset.studentId;
-            const total = document.querySelectorAll(`input[data-student-id="${studentId}"]:checked`).length;
-            document.getElementById(`total-${studentId}`).textContent = total;
+            const date = this.dataset.date;
+            const isChecked = this.checked;
+            
+            // Update all totals immediately
+            updateAllTotals();
+            
+            // Save this specific attendance change
+            fetch('{% url "attendance_record" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ 
+                    attendance: [{
+                        student_id: studentId,
+                        date: date,
+                        is_present: isChecked
+                    }],
+                    instructor_assignments: [],
+                    class_type: '{{ selected_class_type }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('Алдаа гарлаа: ' + (data.error || 'Тодорхойгүй алдаа'));
+                    // Revert checkbox state on error
+                    this.checked = !isChecked;
+                    // Update totals again
+                    updateAllTotals();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Сүлжээний алдаа гарлаа');
+                // Revert checkbox state on error
+                this.checked = !isChecked;
+                updateAllTotals();
+            });
         });
     });
 

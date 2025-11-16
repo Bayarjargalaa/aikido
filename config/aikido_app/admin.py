@@ -1,5 +1,9 @@
 from django.contrib import admin
-from .models import Student, Instructor, ClassType, ClassSession, InstructorAssignment, Attendance, Payment, RankHistory
+from .models import (
+    Student, Instructor, ClassType, ClassSession, InstructorAssignment, 
+    Attendance, Payment, RankHistory, BankTransaction, PaymentAllocation,
+    ExpenseCategory, ExpenseAllocation
+)
 
 
 class RankHistoryInline(admin.TabularInline):
@@ -147,3 +151,101 @@ class RankHistoryAdmin(admin.ModelAdmin):
     def get_person(self, obj):
         return obj.student or obj.instructor
     get_person.short_description = 'Хэн'
+
+
+class PaymentAllocationInline(admin.TabularInline):
+    model = PaymentAllocation
+    extra = 1
+    fields = ['student', 'payment_month', 'amount', 'notes']
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "student":
+            kwargs["queryset"] = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(BankTransaction)
+class BankTransactionAdmin(admin.ModelAdmin):
+    list_display = ['transaction_date', 'amount', 'payer_name', 'status', 'get_allocated_amount', 'get_remaining_amount', 'imported_at']
+    list_filter = ['status', 'transaction_date', 'imported_at']
+    search_fields = ['payer_name', 'description', 'reference_number']
+    date_hierarchy = 'transaction_date'
+    ordering = ['-transaction_date', '-imported_at']
+    readonly_fields = ['imported_at', 'get_allocated_amount', 'get_remaining_amount']
+    inlines = [PaymentAllocationInline]
+    
+    fieldsets = (
+        ('Банкны гүйлгээний мэдээлэл', {
+            'fields': ('transaction_date', 'amount', 'payer_name', 'description', 'reference_number')
+        }),
+        ('Төлөв', {
+            'fields': ('status', 'notes', 'imported_at')
+        }),
+        ('Хуваарилалт', {
+            'fields': ('get_allocated_amount', 'get_remaining_amount'),
+            'description': 'Хуваарилагдсан болон үлдсэн дүн'
+        }),
+    )
+    
+    def get_allocated_amount(self, obj):
+        return f"{obj.get_allocated_amount()}₮"
+    get_allocated_amount.short_description = 'Хуваарилагдсан дүн'
+    
+    def get_remaining_amount(self, obj):
+        return f"{obj.get_remaining_amount()}₮"
+    get_remaining_amount.short_description = 'Үлдсэн дүн'
+
+
+@admin.register(PaymentAllocation)
+class PaymentAllocationAdmin(admin.ModelAdmin):
+    list_display = ['bank_transaction', 'student', 'payment_month', 'amount', 'created_at']
+    list_filter = ['payment_month', 'created_at']
+    search_fields = ['student__first_name', 'student__last_name', 'bank_transaction__payer_name']
+    date_hierarchy = 'payment_month'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('Банкны гүйлгээ', {
+            'fields': ('bank_transaction',)
+        }),
+        ('Хуваарилалт', {
+            'fields': ('student', 'payment_month', 'amount', 'notes')
+        }),
+        ('Бусад', {
+            'fields': ('created_by', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['created_at']
+
+
+@admin.register(ExpenseCategory)
+class ExpenseCategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'description', 'created_at']
+    search_fields = ['name', 'description']
+    ordering = ['name']
+
+
+@admin.register(ExpenseAllocation)
+class ExpenseAllocationAdmin(admin.ModelAdmin):
+    list_display = ['bank_transaction', 'expense_category', 'expense_date', 'amount', 'created_at']
+    list_filter = ['expense_category', 'expense_date', 'created_at']
+    search_fields = ['expense_category__name', 'bank_transaction__description', 'notes']
+    date_hierarchy = 'expense_date'
+    ordering = ['-expense_date', '-created_at']
+    
+    fieldsets = (
+        ('Банкны гүйлгээ', {
+            'fields': ('bank_transaction',)
+        }),
+        ('Зардлын мэдээлэл', {
+            'fields': ('expense_category', 'expense_date', 'amount', 'notes')
+        }),
+        ('Бусад', {
+            'fields': ('created_by', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['created_at']
