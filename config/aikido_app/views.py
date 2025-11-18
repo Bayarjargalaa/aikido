@@ -15,7 +15,8 @@ from .models import (
     Student, Instructor, ClassSession, Attendance, Payment, 
     ClassType, InstructorAssignment, BankTransaction, PaymentAllocation,
     IncomeCategory, IncomeAllocation, ExpenseCategory, ExpenseAllocation,
-    Seminar, SeminarPaymentAllocation, MembershipPaymentAllocation
+    Seminar, SeminarPaymentAllocation, MembershipPaymentAllocation,
+    MonthlyInstructorPayment, MonthlyFederationPayment
 )
 from .forms import BankTransactionUploadForm, PaymentAllocationForm
 
@@ -87,7 +88,11 @@ def register_view(request):
 
 @login_required
 def dashboard(request):
-    """Хяналтын самбар"""
+    """Хяналтын самбар - зөвхөн админ"""
+    # Redirect non-admin users to class schedule
+    if not request.user.is_staff:
+        return redirect('class_schedule')
+    
     # Stats
     total_students = Student.objects.filter(is_active=True).count()
     total_instructors = Instructor.objects.filter(is_active=True).count()
@@ -175,7 +180,7 @@ def student_list(request):
     # Use the sort parameter if valid, otherwise default
     order_by = valid_sorts.get(sort_by, 'first_name')
     
-    students = Student.objects.all().order_by(order_by, 'last_name', 'first_name')
+    students = Student.objects.prefetch_related('class_types').all().order_by(order_by, 'last_name', 'first_name')
     
     return render(request, 'aikido_app/student_list.html', {
         'students': students,
@@ -289,6 +294,9 @@ def student_delete(request, pk):
 @login_required
 def instructor_list(request):
     """Багш нарын жагсаалт"""
+    # Check if user is an instructor (non-staff)
+    is_instructor_user = hasattr(request.user, 'instructor_profile') and not request.user.is_staff
+    
     # Get sort parameter from query string
     sort_by = request.GET.get('sort', 'name_asc')
     
@@ -308,10 +316,15 @@ def instructor_list(request):
     # Get filter parameter
     show_inactive = request.GET.get('show_inactive', 'false') == 'true'
     
-    if show_inactive:
-        instructors = Instructor.objects.all()
+    if is_instructor_user:
+        # Instructor users only see themselves
+        instructors = Instructor.objects.filter(user=request.user)
     else:
-        instructors = Instructor.objects.filter(is_active=True)
+        # Admin/staff see all instructors
+        if show_inactive:
+            instructors = Instructor.objects.all()
+        else:
+            instructors = Instructor.objects.filter(is_active=True)
     
     instructors = instructors.order_by(order_by, 'last_name', 'first_name')
     
@@ -466,10 +479,26 @@ def class_schedule(request):
 @login_required
 def attendance_list(request):
     """Ирцийн жагсаалт"""
-    attendances = Attendance.objects.select_related(
-        'student', 'session', 'recorded_by'
-    ).order_by('-session__date')[:50]
-    return render(request, 'aikido_app/attendance_list.html', {'attendances': attendances})
+    # Check if user is a student
+    is_student_user = hasattr(request.user, 'student_profile') and request.user.student_profile
+    
+    if is_student_user:
+        # Students see only their own attendance
+        attendances = Attendance.objects.select_related(
+            'student', 'session', 'recorded_by'
+        ).filter(student=request.user.student_profile).order_by('-session__date')[:50]
+    else:
+        # Admins and instructors see all attendance
+        attendances = Attendance.objects.select_related(
+            'student', 'session', 'recorded_by'
+        ).order_by('-session__date')[:50]
+    
+    context = {
+        'attendances': attendances,
+        'is_student_user': is_student_user
+    }
+    
+    return render(request, 'aikido_app/attendance_list.html', context)
 
 
 @login_required
@@ -1796,50 +1825,88 @@ def bank_transaction_match(request, transaction_id):
                 return redirect('bank_transaction_list')
         
         elif is_expense:
-            # Handle expense allocations (expense)
-            expense_categories = request.POST.getlist('expense_category[]')
-            new_categories = request.POST.getlist('new_category[]')
-            expense_dates = request.POST.getlist('expense_date[]')
-            amounts = request.POST.getlist('amount[]')
-            notes_list = request.POST.getlist('notes[]')
+            # Check if this is instructor/federation payment
+            expense_type = request.POST.get('expense_type', 'regular')
             
-            for i in range(len(expense_categories)):
-                category_id = expense_categories[i] if i < len(expense_categories) else ''
-                new_category_name = new_categories[i] if i < len(new_categories) else ''
+            if expense_type == 'instructor_payment':
+                # Handle instructor payment linking
+                payment_ids = request.POST.getlist('instructor_payment_id[]')
                 
-                if (category_id or new_category_name) and i < len(expense_dates) and i < len(amounts):
-                    if not amounts[i]:
-                        continue
-                        
-                    try:
-                        # Get or create category
-                        if new_category_name:
-                            category, _ = ExpenseCategory.objects.get_or_create(name=new_category_name.strip())
-                        elif category_id:
-                            category = ExpenseCategory.objects.get(id=category_id)
-                        else:
+                for payment_id in payment_ids:
+                    if payment_id:
+                        try:
+                            payment = MonthlyInstructorPayment.objects.get(id=payment_id)
+                            payment.bank_transaction = transaction
+                            payment.is_paid = True
+                            payment.paid_date = datetime.now().date()
+                            payment.save()
+                        except MonthlyInstructorPayment.DoesNotExist:
+                            messages.error(request, f'Төлбөр #{payment_id} олдсонгүй!')
+                
+                messages.success(request, 'Багшийн төлбөр амжилттай холбогдлоо!')
+                
+            elif expense_type == 'federation_payment':
+                # Handle federation payment linking
+                payment_ids = request.POST.getlist('federation_payment_id[]')
+                
+                for payment_id in payment_ids:
+                    if payment_id:
+                        try:
+                            payment = MonthlyFederationPayment.objects.get(id=payment_id)
+                            payment.bank_transaction = transaction
+                            payment.is_paid = True
+                            payment.paid_date = datetime.now().date()
+                            payment.save()
+                        except MonthlyFederationPayment.DoesNotExist:
+                            messages.error(request, f'Төлбөр #{payment_id} олдсонгүй!')
+                
+                messages.success(request, 'Холбооны төлбөр амжилттай холбогдлоо!')
+                
+            else:
+                # Handle regular expense allocations
+                expense_categories = request.POST.getlist('expense_category[]')
+                new_categories = request.POST.getlist('new_category[]')
+                expense_dates = request.POST.getlist('expense_date[]')
+                amounts = request.POST.getlist('amount[]')
+                notes_list = request.POST.getlist('notes[]')
+                
+                for i in range(len(expense_categories)):
+                    category_id = expense_categories[i] if i < len(expense_categories) else ''
+                    new_category_name = new_categories[i] if i < len(new_categories) else ''
+                    
+                    if (category_id or new_category_name) and i < len(expense_dates) and i < len(amounts):
+                        if not amounts[i]:
                             continue
-                        
-                        amount = Decimal(amounts[i])
-                        expense_date = datetime.strptime(expense_dates[i], '%Y-%m-%d').date()
-                        
-                        instructor = None
-                        if hasattr(request.user, 'instructor_profile'):
-                            instructor = request.user.instructor_profile
-                        
-                        ExpenseAllocation.objects.create(
-                            bank_transaction=transaction,
-                            expense_category=category,
-                            expense_date=expense_date,
-                            amount=amount,
-                            notes=notes_list[i] if i < len(notes_list) else '',
-                            created_by=instructor
-                        )
-                    except Exception as e:
-                        messages.error(request, f'Алдаа гарлаа: {str(e)}')
-                        return redirect('bank_transaction_match', transaction_id=transaction_id)
-            
-            messages.success(request, 'Зардлын хуваарилалт амжилттай үүслээ!')
+                            
+                        try:
+                            # Get or create category
+                            if new_category_name:
+                                category, _ = ExpenseCategory.objects.get_or_create(name=new_category_name.strip())
+                            elif category_id:
+                                category = ExpenseCategory.objects.get(id=category_id)
+                            else:
+                                continue
+                            
+                            amount = Decimal(amounts[i])
+                            expense_date = datetime.strptime(expense_dates[i], '%Y-%m-%d').date()
+                            
+                            instructor = None
+                            if hasattr(request.user, 'instructor_profile'):
+                                instructor = request.user.instructor_profile
+                            
+                            ExpenseAllocation.objects.create(
+                                bank_transaction=transaction,
+                                expense_category=category,
+                                expense_date=expense_date,
+                                amount=amount,
+                                notes=notes_list[i] if i < len(notes_list) else '',
+                                created_by=instructor
+                            )
+                        except Exception as e:
+                            messages.error(request, f'Алдаа гарлаа: {str(e)}')
+                            return redirect('bank_transaction_match', transaction_id=transaction_id)
+                
+                messages.success(request, 'Зардлын хуваарилалт амжилттай үүслээ!')
         
         # Update transaction status
         transaction.update_status()
@@ -1881,12 +1948,423 @@ def bank_transaction_match(request, transaction_id):
     elif is_expense:
         expense_categories = ExpenseCategory.objects.all().order_by('name')
         expense_allocations = transaction.expense_allocations.all()
+        
+        # Get unpaid instructor and federation payments for this transaction to link
+        unpaid_instructor_payments = MonthlyInstructorPayment.objects.filter(
+            is_paid=False
+        ).select_related('instructor', 'class_type').order_by('-month', 'instructor__last_name')
+        
+        unpaid_federation_payments = MonthlyFederationPayment.objects.filter(
+            is_paid=False
+        ).select_related('class_type').order_by('-month', 'class_type')
+        
         context.update({
             'expense_categories': expense_categories,
             'expense_allocations': expense_allocations,
+            'unpaid_instructor_payments': unpaid_instructor_payments,
+            'unpaid_federation_payments': unpaid_federation_payments,
         })
     
     return render(request, 'aikido_app/bank_transaction_match.html', context)
 
+
+@login_required
+def monthly_payment_report(request):
+    """Сарын төлбөрийн тайлан - Багш болон холбооны хуваарилалт"""
+    # Get filter parameters
+    month_str = request.GET.get('month')
+    year_str = request.GET.get('year')
+    view_mode = request.GET.get('view_mode', 'month')  # month, year, all
     
-    return JsonResponse({'error': 'Invalid request method'}, status=405)
+    month_date = None
+    year_filter = None
+    
+    if view_mode == 'month':
+        # Month view
+        if month_str:
+            try:
+                year, month_num = map(int, month_str.split('-'))
+                month_date = datetime(year, month_num, 1).date()
+            except (ValueError, AttributeError):
+                month_date = datetime.now().date().replace(day=1)
+        else:
+            month_date = datetime.now().date().replace(day=1)
+    elif view_mode == 'year':
+        # Year view
+        if year_str:
+            try:
+                year_filter = int(year_str)
+            except (ValueError, TypeError):
+                year_filter = datetime.now().year
+        else:
+            year_filter = datetime.now().year
+    # else: view_mode == 'all' - no filters
+    
+    # Get all class types
+    class_types = ClassType.objects.all()
+    
+    # Build report data for each class type
+    report_data = []
+    for class_type in class_types:
+        # Build query based on view mode
+        payment_filter = {'student__class_types': class_type}
+        
+        if view_mode == 'month' and month_date:
+            payment_filter['payment_month__year'] = month_date.year
+            payment_filter['payment_month__month'] = month_date.month
+        elif view_mode == 'year' and year_filter:
+            payment_filter['payment_month__year'] = year_filter
+        # else: view_mode == 'all' - no date filters
+        
+        # Get total payments collected for this class type
+        payments = PaymentAllocation.objects.filter(**payment_filter)
+        total_collected = payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        student_count = payments.values('student').distinct().count()
+        
+        # Calculate splits
+        federation_share = total_collected * Decimal('0.50')  # 50% for federation
+        instructor_pool = total_collected * Decimal('0.50')   # 50% for instructors
+        
+        # Get federation payment record (if exists) - only for month view
+        federation_payment = None
+        if view_mode == 'month' and month_date:
+            federation_payment = MonthlyFederationPayment.objects.filter(
+                class_type=class_type,
+                month=month_date
+            ).first()
+        
+        # Get instructor payments - only for month view
+        instructor_payments = MonthlyInstructorPayment.objects.none()
+        if view_mode == 'month' and month_date:
+            instructor_payments = MonthlyInstructorPayment.objects.filter(
+                class_type=class_type,
+                month=month_date
+            ).select_related('instructor').order_by('role', 'instructor__last_name')
+        
+        # Calculate instructor totals
+        instructor_total = instructor_payments.aggregate(total=Sum('instructor_share_amount'))['total'] or Decimal('0.00')
+        
+        # Group by role
+        lead_payments = instructor_payments.filter(role=InstructorAssignment.LEAD)
+        assistant_payments = instructor_payments.filter(role=InstructorAssignment.ASSISTANT)
+        
+        report_data.append({
+            'class_type': class_type,
+            'total_collected': total_collected,
+            'federation_share': federation_share,
+            'instructor_total': instructor_total,
+            'instructor_pool': instructor_pool,
+            'student_count': student_count,
+            'lead_payments': lead_payments,
+            'assistant_payments': assistant_payments,
+            'federation_payment': federation_payment,
+        })
+    
+    # Calculate grand totals
+    grand_total_collected = Decimal('0.00')
+    grand_federation_share = Decimal('0.00')
+    grand_instructor_total = Decimal('0.00')
+    
+    for item in report_data:
+        grand_total_collected += item['total_collected']
+        grand_federation_share += item['federation_share']
+        grand_instructor_total += item['instructor_pool']  # Use instructor_pool instead of instructor_total
+    
+    context = {
+        'month_date': month_date,
+        'year_filter': year_filter,
+        'view_mode': view_mode,
+        'report_data': report_data,
+        'grand_total_collected': grand_total_collected,
+        'grand_federation_share': grand_federation_share,
+        'grand_instructor_total': grand_instructor_total,
+        'available_years': range(2020, datetime.now().year + 2),  # 2020 to next year
+    }
+    
+    return render(request, 'aikido_app/monthly_payment_report.html', context)
+
+
+@login_required
+def instructor_payment_list(request):
+    """Багшийн төлбөрийн жагсаалт"""
+    # Check if user is an instructor (non-staff)
+    is_instructor_user = hasattr(request.user, 'instructor_profile') and not request.user.is_staff
+    
+    # Filter options
+    month_str = request.GET.get('month')
+    instructor_id = request.GET.get('instructor')
+    class_type_id = request.GET.get('class_type')
+    is_paid = request.GET.get('is_paid')
+    
+    # Base query
+    payments = MonthlyInstructorPayment.objects.select_related(
+        'instructor', 'class_type'
+    ).order_by('-month', 'class_type', 'instructor__last_name')
+    
+    # If instructor user, filter to only their payments
+    if is_instructor_user:
+        payments = payments.filter(instructor=request.user.instructor_profile)
+        # Don't allow them to filter by other instructors
+        instructor_id = None
+    
+    # Apply filters
+    if month_str:
+        try:
+            year, month = map(int, month_str.split('-'))
+            month_date = datetime(year, month, 1).date()
+            payments = payments.filter(month=month_date)
+        except (ValueError, AttributeError):
+            pass
+    
+    if instructor_id:
+        payments = payments.filter(instructor_id=instructor_id)
+    
+    if class_type_id:
+        payments = payments.filter(class_type_id=class_type_id)
+    
+    if is_paid == 'yes':
+        payments = payments.filter(is_paid=True)
+    elif is_paid == 'no':
+        payments = payments.filter(is_paid=False)
+    
+    # Calculate summary
+    total_amount = payments.aggregate(total=Sum('instructor_share_amount'))['total'] or Decimal('0.00')
+    paid_amount = payments.filter(is_paid=True).aggregate(total=Sum('instructor_share_amount'))['total'] or Decimal('0.00')
+    unpaid_amount = payments.filter(is_paid=False).aggregate(total=Sum('instructor_share_amount'))['total'] or Decimal('0.00')
+    
+    # Calculate detailed breakdown by class type and role for understanding
+    calculation_details = []
+    if month_str:
+        try:
+            year, month = map(int, month_str.split('-'))
+            month_date = datetime(year, month, 1).date()
+            
+            for class_type in ClassType.objects.all():
+                # Get payments for this class type in this month
+                class_payments = PaymentAllocation.objects.filter(
+                    payment_month=month_date,
+                    student__class_types=class_type
+                )
+                total_collected = class_payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                
+                if total_collected > 0:
+                    instructor_pool = total_collected * Decimal('0.50')  # 50% for instructors
+                    lead_pool = instructor_pool * Decimal('0.60')  # 60% for leads
+                    assistant_pool = instructor_pool * Decimal('0.40')  # 40% for assistants
+                    
+                    # Count total classes in this month
+                    lead_classes = InstructorAssignment.objects.filter(
+                        session__date__year=year,
+                        session__date__month=month,
+                        session__class_type=class_type,
+                        role='LEAD'
+                    ).count()
+                    
+                    assistant_classes = InstructorAssignment.objects.filter(
+                        session__date__year=year,
+                        session__date__month=month,
+                        session__class_type=class_type,
+                        role='ASSISTANT'
+                    ).count()
+                    
+                    per_lead_class = (lead_pool / lead_classes) if lead_classes > 0 else Decimal('0.00')
+                    per_assistant_class = (assistant_pool / assistant_classes) if assistant_classes > 0 else Decimal('0.00')
+                    
+                    calculation_details.append({
+                        'class_type': class_type,
+                        'total_collected': total_collected,
+                        'instructor_pool': instructor_pool,
+                        'lead_pool': lead_pool,
+                        'assistant_pool': assistant_pool,
+                        'lead_classes': lead_classes,
+                        'assistant_classes': assistant_classes,
+                        'per_lead_class': per_lead_class,
+                        'per_assistant_class': per_assistant_class,
+                    })
+        except (ValueError, AttributeError):
+            pass
+    
+    context = {
+        'payments': payments,
+        'instructors': Instructor.objects.filter(is_active=True).order_by('last_name'),
+        'class_types': ClassType.objects.all(),
+        'total_amount': total_amount,
+        'paid_amount': paid_amount,
+        'unpaid_amount': unpaid_amount,
+        'calculation_details': calculation_details,
+        'selected_month': month_str,
+        'is_instructor_user': is_instructor_user,
+        'filters': {
+            'month': month_str,
+            'instructor': instructor_id,
+            'class_type': class_type_id,
+            'is_paid': is_paid,
+        }
+    }
+    
+    return render(request, 'aikido_app/instructor_payment_list.html', context)
+
+
+@login_required
+def mark_instructor_payment_paid(request, payment_id):
+    """Багшийн төлбөрийг олгосон гэж тэмдэглэх"""
+    payment = get_object_or_404(MonthlyInstructorPayment, id=payment_id)
+    
+    if request.method == 'POST':
+        bank_transaction_id = request.POST.get('bank_transaction_id')
+        
+        # If bank transaction is selected, link it
+        if bank_transaction_id:
+            try:
+                bank_transaction = BankTransaction.objects.get(id=bank_transaction_id)
+                payment.bank_transaction = bank_transaction
+            except BankTransaction.DoesNotExist:
+                messages.error(request, 'Банкны гүйлгээ олдсонгүй!')
+                return redirect('instructor_payment_list')
+        
+        payment.is_paid = True
+        payment.paid_date = datetime.now().date()
+        payment.save()
+        messages.success(request, f'{payment.instructor} - {payment.instructor_share_amount}₮ олгосон гэж тэмдэглэгдлээ!')
+        return redirect('instructor_payment_list')
+    
+    # GET - show form with available bank transactions (debit transactions for payment)
+    # Get recent debit transactions that could be instructor payments
+    recent_transactions = BankTransaction.objects.filter(
+        debit_amount__gt=0
+    ).order_by('-transaction_date')[:50]
+    
+    context = {
+        'payment': payment,
+        'recent_transactions': recent_transactions,
+    }
+    return render(request, 'aikido_app/confirm_payment.html', context)
+
+
+@login_required
+def federation_payment_list(request):
+    """Холбооны төлбөрийн жагсаалт"""
+    # Filter options
+    month_str = request.GET.get('month')
+    class_type_id = request.GET.get('class_type')
+    is_paid = request.GET.get('is_paid')
+    
+    # Base query
+    payments = MonthlyFederationPayment.objects.select_related(
+        'class_type'
+    ).order_by('-month', 'class_type')
+    
+    # Apply filters
+    if month_str:
+        try:
+            year, month = map(int, month_str.split('-'))
+            month_date = datetime(year, month, 1).date()
+            payments = payments.filter(month=month_date)
+        except (ValueError, AttributeError):
+            pass
+    
+    if class_type_id:
+        payments = payments.filter(class_type_id=class_type_id)
+    
+    if is_paid == 'yes':
+        payments = payments.filter(is_paid=True)
+    elif is_paid == 'no':
+        payments = payments.filter(is_paid=False)
+    
+    # Calculate summary
+    total_amount = payments.aggregate(total=Sum('federation_share_amount'))['total'] or Decimal('0.00')
+    paid_amount = payments.filter(is_paid=True).aggregate(total=Sum('federation_share_amount'))['total'] or Decimal('0.00')
+    unpaid_amount = payments.filter(is_paid=False).aggregate(total=Sum('federation_share_amount'))['total'] or Decimal('0.00')
+    
+    context = {
+        'payments': payments,
+        'class_types': ClassType.objects.all(),
+        'total_amount': total_amount,
+        'paid_amount': paid_amount,
+        'unpaid_amount': unpaid_amount,
+        'filters': {
+            'month': month_str,
+            'class_type': class_type_id,
+            'is_paid': is_paid,
+        }
+    }
+    
+    return render(request, 'aikido_app/federation_payment_list.html', context)
+
+
+@login_required
+def mark_federation_payment_paid(request, payment_id):
+    """Холбооны төлбөрийг олгосон гэж тэмдэглэх"""
+    payment = get_object_or_404(MonthlyFederationPayment, id=payment_id)
+    
+    if request.method == 'POST':
+        bank_transaction_id = request.POST.get('bank_transaction_id')
+        
+        # If bank transaction is selected, link it
+        if bank_transaction_id:
+            try:
+                bank_transaction = BankTransaction.objects.get(id=bank_transaction_id)
+                payment.bank_transaction = bank_transaction
+            except BankTransaction.DoesNotExist:
+                messages.error(request, 'Банкны гүйлгээ олдсонгүй!')
+                return redirect('federation_payment_list')
+        
+        payment.is_paid = True
+        payment.paid_date = datetime.now().date()
+        payment.save()
+        messages.success(request, f'{payment.class_type} - {payment.federation_share_amount}₮ олгосон гэж тэмдэглэгдлээ!')
+        return redirect('federation_payment_list')
+    
+    # GET - show form with available bank transactions (debit transactions for payment)
+    recent_transactions = BankTransaction.objects.filter(
+        debit_amount__gt=0
+    ).order_by('-transaction_date')[:50]
+    
+    context = {
+        'payment': payment,
+        'recent_transactions': recent_transactions,
+    }
+    return render(request, 'aikido_app/confirm_payment.html', context)
+
+
+@login_required
+def calculate_instructor_payments_from_attendance(request):
+    """Ирцийн хуудаснаас багшийн төлбөр тооцоолох"""
+    if request.method == 'POST':
+        month_str = request.POST.get('month')
+        
+        if not month_str:
+            messages.error(request, 'Сар сонгоно уу!')
+            return redirect('attendance_record')
+        
+        try:
+            # Parse month
+            year, month = map(int, month_str.split('-'))
+            month_date = datetime(year, month, 1).date()
+            
+            # Call management command logic
+            from django.core.management import call_command
+            from io import StringIO
+            
+            out = StringIO()
+            call_command('calculate_monthly_payments', 
+                        month=month_str,
+                        recalculate=True,
+                        stdout=out)
+            
+            output = out.getvalue()
+            
+            messages.success(request, f'{month_str} сарын багшийн төлбөр амжилттай тооцоологдлоо!')
+            
+            # Redirect back to attendance record page with the same month
+            return redirect(f'/attendance/record/?month={month_str}')
+            
+        except Exception as e:
+            messages.error(request, f'Алдаа гарлаа: {str(e)}')
+            return redirect('attendance_record')
+    
+    return redirect('attendance_record')
+
+
+        
+    

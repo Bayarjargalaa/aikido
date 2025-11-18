@@ -26,6 +26,14 @@ urlpatterns = [
     path('membership-payments/', views.membership_payment_list, name='membership_payment_list'),
     path('income/', views.income_list, name='income_list'),
     
+    # Monthly payment reports
+    path('monthly-payment-report/', views.monthly_payment_report, name='monthly_payment_report'),
+    path('instructor-payments/', views.instructor_payment_list, name='instructor_payment_list'),
+    path('instructor-payments/<int:payment_id>/mark-paid/', views.mark_instructor_payment_paid, name='mark_instructor_payment_paid'),
+    path('instructor-payments/calculate-from-attendance/', views.calculate_instructor_payments_from_attendance, name='calculate_instructor_payments_from_attendance'),
+    path('federation-payments/', views.federation_payment_list, name='federation_payment_list'),
+    path('federation-payments/<int:payment_id>/mark-paid/', views.mark_federation_payment_paid, name='mark_federation_payment_paid'),
+    
     # Bank transactions
     path('bank-transactions/', views.bank_transaction_list, name='bank_transaction_list'),
     path('bank-transactions/upload/', views.bank_transaction_upload, name='bank_transaction_upload'),

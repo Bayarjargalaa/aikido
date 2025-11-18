@@ -202,7 +202,76 @@
     </div>
     {% endif %}
 
-    {% if is_expense and expense_allocations %}
+    {% if is_expense %}
+    <!-- Linked Instructor Payments -->
+    {% with transaction.instructor_payments.all as instructor_payments %}
+    {% if instructor_payments %}
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-chalkboard-teacher mr-2 text-blue-600"></i>Холбогдсон багшийн төлбөр
+        </h2>
+        <div class="space-y-3">
+            {% for payment in instructor_payments %}
+            <div class="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div class="flex items-center gap-4">
+                    <i class="fas fa-user-circle text-blue-600 text-2xl"></i>
+                    <div>
+                        <p class="font-semibold text-gray-800">{{ payment.instructor }}</p>
+                        <p class="text-sm text-gray-600">
+                            {{ payment.class_type.get_name_display }} - {{ payment.month|date:"Y-m" }} - {{ payment.get_role_display }}
+                        </p>
+                        <p class="text-xs text-gray-500">{{ payment.total_classes }} хичээл</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p class="text-2xl font-bold text-blue-600">{{ payment.instructor_share_amount|floatformat:0 }}₮</p>
+                        {% if payment.paid_date %}
+                        <p class="text-xs text-gray-500">{{ payment.paid_date|date:"Y-m-d" }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- Linked Federation Payments -->
+    {% with transaction.federation_payments.all as federation_payments %}
+    {% if federation_payments %}
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-university mr-2 text-purple-600"></i>Холбогдсон холбооны төлбөр
+        </h2>
+        <div class="space-y-3">
+            {% for payment in federation_payments %}
+            <div class="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <div class="flex items-center gap-4">
+                    <i class="fas fa-building text-purple-600 text-2xl"></i>
+                    <div>
+                        <p class="font-semibold text-gray-800">{{ payment.class_type.get_name_display }}</p>
+                        <p class="text-sm text-gray-600">{{ payment.month|date:"Y-m" }}</p>
+                        <p class="text-xs text-gray-500">Нийт: {{ payment.total_payment_collected|floatformat:0 }}₮</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p class="text-2xl font-bold text-purple-600">{{ payment.federation_share_amount|floatformat:0 }}₮</p>
+                        {% if payment.paid_date %}
+                        <p class="text-xs text-gray-500">{{ payment.paid_date|date:"Y-m-d" }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% if expense_allocations %}
     <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h2 class="text-xl font-bold text-gray-800 mb-4">
             <i class="fas fa-list mr-2 text-red-600"></i>Одоо байгаа зардлын хуваарилалт
@@ -234,6 +303,7 @@
             {% endfor %}
         </div>
     </div>
+    {% endif %}
     {% endif %}
 
     <!-- Add New Allocations -->
@@ -564,7 +634,32 @@
             <!-- End Membership Payment Form -->
             
             {% elif is_expense %}
-            <!-- Expense Allocation Form -->
+            <!-- Expense Type Selection -->
+            <div class="mb-6 p-4 bg-red-50 rounded-lg border border-red-200">
+                <label class="block text-sm font-medium text-gray-700 mb-3">
+                    <i class="fas fa-list-ul mr-1"></i>Зардлын төрөл сонгох
+                </label>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <label class="flex items-center">
+                        <input type="radio" name="expense_type" value="regular" checked
+                               class="mr-2" onchange="toggleExpenseForm()">
+                        <span class="text-sm font-medium">Энгийн зардал</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="expense_type" value="instructor_payment"
+                               class="mr-2" onchange="toggleExpenseForm()">
+                        <span class="text-sm font-medium">Багшийн цалин</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="expense_type" value="federation_payment"
+                               class="mr-2" onchange="toggleExpenseForm()">
+                        <span class="text-sm font-medium">Холбооны төлбөр</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Regular Expense Allocation Form -->
+            <div id="regular-expense-form">
             <div id="expense-rows" class="space-y-4 mb-6">
                 <!-- Initial row -->
                 <div class="expense-row grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -620,6 +715,84 @@
                     class="w-full py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 border-2 border-dashed border-blue-300 mb-6">
                 <i class="fas fa-plus-circle mr-2"></i>Мөр нэмэх
             </button>
+            </div>
+            <!-- End Regular Expense Form -->
+
+            <!-- Instructor Payment Form -->
+            <div id="instructor-payment-form" style="display:none;">
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-chalkboard-teacher mr-2 text-blue-600"></i>Багшийн цалин олгох
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">Төлбөр олгох багш нарыг сонгоно уу</p>
+                    
+                    <div class="space-y-3 max-h-96 overflow-y-auto">
+                        {% for payment in unpaid_instructor_payments %}
+                        <label class="flex items-center p-4 bg-white rounded-lg border border-gray-300 hover:bg-blue-50 cursor-pointer">
+                            <input type="checkbox" name="instructor_payment_id[]" value="{{ payment.id }}"
+                                   class="mr-4 w-5 h-5 text-blue-600">
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="font-semibold text-gray-900">{{ payment.instructor }}</p>
+                                        <p class="text-sm text-gray-600">
+                                            {{ payment.class_type.get_name_display }} - {{ payment.month|date:"Y-m" }} - {{ payment.get_role_display }}
+                                        </p>
+                                        <p class="text-xs text-gray-500">{{ payment.total_classes }} хичээл</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-xl font-bold text-blue-600">{{ payment.instructor_share_amount|floatformat:0 }}₮</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </label>
+                        {% empty %}
+                        <div class="text-center py-8 text-gray-500">
+                            <i class="fas fa-inbox text-4xl mb-2"></i>
+                            <p>Олгоогүй багшийн төлбөр байхгүй</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <!-- End Instructor Payment Form -->
+
+            <!-- Federation Payment Form -->
+            <div id="federation-payment-form" style="display:none;">
+                <div class="bg-purple-50 border border-purple-200 rounded-lg p-6 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-university mr-2 text-purple-600"></i>Холбооны төлбөр олгох
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">Төлбөр олгох холбооны хуваарилалтыг сонгоно уу</p>
+                    
+                    <div class="space-y-3 max-h-96 overflow-y-auto">
+                        {% for payment in unpaid_federation_payments %}
+                        <label class="flex items-center p-4 bg-white rounded-lg border border-gray-300 hover:bg-purple-50 cursor-pointer">
+                            <input type="checkbox" name="federation_payment_id[]" value="{{ payment.id }}"
+                                   class="mr-4 w-5 h-5 text-purple-600">
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="font-semibold text-gray-900">{{ payment.class_type.get_name_display }}</p>
+                                        <p class="text-sm text-gray-600">{{ payment.month|date:"Y-m" }}</p>
+                                        <p class="text-xs text-gray-500">Нийт цуглуулсан: {{ payment.total_payment_collected|floatformat:0 }}₮</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-xl font-bold text-purple-600">{{ payment.federation_share_amount|floatformat:0 }}₮</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </label>
+                        {% empty %}
+                        <div class="text-center py-8 text-gray-500">
+                            <i class="fas fa-inbox text-4xl mb-2"></i>
+                            <p>Олгоогүй холбооны төлбөр байхгүй</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <!-- End Federation Payment Form -->
             {% endif %}
 
             <!-- Actions -->
@@ -807,6 +980,48 @@ function removeExpenseRow(button) {
         button.closest('.expense-row').remove();
     } else {
         alert('Хамгийн багадаа 1 мөр байх ёстой');
+    }
+}
+
+// Toggle between expense types
+function toggleExpenseForm() {
+    const expenseType = document.querySelector('input[name="expense_type"]:checked').value;
+    const regularForm = document.getElementById('regular-expense-form');
+    const instructorForm = document.getElementById('instructor-payment-form');
+    const federationForm = document.getElementById('federation-payment-form');
+    
+    // Hide all forms
+    regularForm.style.display = 'none';
+    instructorForm.style.display = 'none';
+    federationForm.style.display = 'none';
+    
+    // Disable all fields
+    [regularForm, instructorForm, federationForm].forEach(form => {
+        form.querySelectorAll('input, select').forEach(el => {
+            el.disabled = true;
+            el.required = false;
+        });
+    });
+    
+    // Show and enable selected form
+    if (expenseType === 'regular') {
+        regularForm.style.display = 'block';
+        regularForm.querySelectorAll('input, select').forEach(el => {
+            el.disabled = false;
+            if (el.name === 'expense_date[]' || el.name === 'amount[]') {
+                el.required = true;
+            }
+        });
+    } else if (expenseType === 'instructor_payment') {
+        instructorForm.style.display = 'block';
+        instructorForm.querySelectorAll('input').forEach(el => {
+            el.disabled = false;
+        });
+    } else if (expenseType === 'federation_payment') {
+        federationForm.style.display = 'block';
+        federationForm.querySelectorAll('input').forEach(el => {
+            el.disabled = false;
+        });
     }
 }
 

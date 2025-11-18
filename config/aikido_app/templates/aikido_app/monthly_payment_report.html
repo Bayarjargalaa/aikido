@@ -1,0 +1,386 @@
+{% extends 'aikido_app/base.html' %}
+
+{% block title %}Сарын төлбөрийн тайлан - Айкидо Сургалт{% endblock %}
+{% block page_title %}Сарын төлбөрийн тайлан{% endblock %}
+{% block page_subtitle %}Багш болон холбооны хуваарилалт{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Filter Selector -->
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <form method="GET" class="space-y-4">
+            <!-- View Mode Selection -->
+            <div class="flex flex-wrap items-center gap-4">
+                <label class="text-sm font-medium text-gray-700">Харах төрөл:</label>
+                <div class="flex gap-2">
+                    <button type="submit" name="view_mode" value="month" 
+                            class="px-4 py-2 rounded-lg transition-colors {% if view_mode == 'month' %}bg-blue-600 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                        <i class="fas fa-calendar-day mr-2"></i>Сараар
+                    </button>
+                    <button type="submit" name="view_mode" value="year" 
+                            class="px-4 py-2 rounded-lg transition-colors {% if view_mode == 'year' %}bg-blue-600 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                        <i class="fas fa-calendar-alt mr-2"></i>Жилээр
+                    </button>
+                    <button type="submit" name="view_mode" value="all" 
+                            class="px-4 py-2 rounded-lg transition-colors {% if view_mode == 'all' %}bg-blue-600 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                        <i class="fas fa-calendar mr-2"></i>Бүгд
+                    </button>
+                </div>
+            </div>
+
+            <!-- Month/Year Selector -->
+            {% if view_mode == 'month' %}
+            <div class="flex items-center space-x-4">
+                <label class="text-sm font-medium text-gray-700">Сар сонгох:</label>
+                <input type="month" name="month" value="{{ month_date|date:'Y-m' }}" 
+                       class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-search mr-2"></i>Харах
+                </button>
+            </div>
+            {% elif view_mode == 'year' %}
+            <div class="flex items-center space-x-4">
+                <label class="text-sm font-medium text-gray-700">Жил сонгох:</label>
+                <select name="year" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    {% for year in available_years %}
+                    <option value="{{ year }}" {% if year == year_filter %}selected{% endif %}>{{ year }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-search mr-2"></i>Харах
+                </button>
+            </div>
+            {% endif %}
+        </form>
+
+        <!-- Current View Display -->
+        <div class="mt-4 pt-4 border-t border-gray-200">
+            <p class="text-sm text-gray-600">
+                <i class="fas fa-filter mr-2"></i>
+                <span class="font-medium">Одоо харж байгаа:</span>
+                {% if view_mode == 'month' %}
+                    <span class="text-blue-600 font-semibold">{{ month_date|date:'Y оны m сар' }}</span>
+                {% elif view_mode == 'year' %}
+                    <span class="text-blue-600 font-semibold">{{ year_filter }} он</span>
+                {% else %}
+                    <span class="text-blue-600 font-semibold">Бүх хугацаа</span>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-blue-100 text-sm font-medium">Цуглуулсан нийт</p>
+                    <h3 class="text-3xl font-bold mt-2">{{ grand_total_collected|floatformat:0 }}₮</h3>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-full p-4">
+                    <i class="fas fa-coins text-2xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-green-100 text-sm font-medium">Холбооны хувь (50%)</p>
+                    <h3 class="text-3xl font-bold mt-2">{{ grand_federation_share|floatformat:0 }}₮</h3>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-full p-4">
+                    <i class="fas fa-building text-2xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-purple-100 text-sm font-medium">Багш нарын хувь (50%)</p>
+                    <h3 class="text-3xl font-bold mt-2">{{ grand_instructor_total|floatformat:0 }}₮</h3>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-full p-4">
+                    <i class="fas fa-chalkboard-teacher text-2xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Class Type Breakdown -->
+    {% for data in report_data %}
+    <div class="bg-white rounded-lg shadow-sm mb-6 overflow-hidden">
+        <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+            <h3 class="text-xl font-bold text-white flex items-center">
+                <i class="fas fa-graduation-cap mr-3"></i>
+                {{ data.class_type.get_name_display }} анги
+            </h3>
+        </div>
+
+        <div class="p-6">
+            <!-- Class Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500">
+                    <p class="text-sm text-gray-600 mb-1">Төлбөр төлсөн сурагч</p>
+                    <p class="text-2xl font-bold text-blue-600">{{ data.student_count }} хүн</p>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4 border-l-4 border-gray-500">
+                    <p class="text-sm text-gray-600 mb-1">Цуглуулсан төлбөр</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ data.total_collected|floatformat:0 }}₮</p>
+                </div>
+                <div class="bg-green-50 rounded-lg p-4 border-l-4 border-green-500">
+                    <p class="text-sm text-gray-600 mb-1">Холбооны хувь (50%)</p>
+                    <p class="text-2xl font-bold text-green-600">{{ data.federation_share|floatformat:0 }}₮</p>
+                </div>
+                <div class="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-500">
+                    <p class="text-sm text-gray-600 mb-1">Багш нарын хувь (50%)</p>
+                    <p class="text-2xl font-bold text-purple-600">{{ data.instructor_pool|floatformat:0 }}₮</p>
+                </div>
+            </div>
+
+            <!-- Payment Distribution Visualization -->
+            {% if data.total_collected > 0 %}
+            <div class="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-xl p-6 mb-6">
+                <h4 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-chart-pie text-blue-600 mr-2"></i>
+                    Төлбөрийн хуваарилалт (50% / 50%)
+                </h4>
+                
+                <!-- Visual Split Display -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                    <!-- Federation Side -->
+                    <div class="bg-white rounded-lg p-5 shadow-md border-l-4 border-green-500">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center">
+                                <div class="bg-green-100 rounded-full p-3 mr-3">
+                                    <i class="fas fa-building text-green-600 text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Монголын Айкидо Холбоо</p>
+                                    <p class="text-2xl font-bold text-green-600">50%</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-green-50 rounded-lg p-3">
+                            <p class="text-xs text-gray-600 mb-1">Тооцоолол:</p>
+                            <p class="text-sm font-mono">{{ data.total_collected|floatformat:0 }}₮ × 50% = 
+                                <span class="font-bold text-green-700">{{ data.federation_share|floatformat:0 }}₮</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Instructors Side -->
+                    <div class="bg-white rounded-lg p-5 shadow-md border-l-4 border-purple-500">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center">
+                                <div class="bg-purple-100 rounded-full p-3 mr-3">
+                                    <i class="fas fa-chalkboard-teacher text-purple-600 text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Багш нарын сан</p>
+                                    <p class="text-2xl font-bold text-purple-600">50%</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-purple-50 rounded-lg p-3">
+                            <p class="text-xs text-gray-600 mb-1">Тооцоолол:</p>
+                            <p class="text-sm font-mono">{{ data.total_collected|floatformat:0 }}₮ × 50% = 
+                                <span class="font-bold text-purple-700">{{ data.instructor_pool|floatformat:0 }}₮</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Instructor Split (60/40) for month view -->
+                {% if view_mode == 'month' %}
+                <div class="bg-white rounded-lg p-4 shadow-sm border border-purple-200">
+                    <p class="text-sm font-semibold text-gray-700 mb-3">
+                        <i class="fas fa-users mr-2"></i>Багш нарын сан дахь хуваарилалт:
+                    </p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-blue-50 rounded-lg p-3">
+                            <div class="flex items-center mb-2">
+                                <i class="fas fa-user-tie text-blue-600 mr-2"></i>
+                                <span class="text-sm font-medium text-gray-700">Ахлах багш</span>
+                            </div>
+                            <p class="text-lg font-bold text-blue-600">60%</p>
+                            <p class="text-xs text-gray-600 mt-1 font-mono">
+                                {{ data.instructor_pool|floatformat:0 }}₮ × 60%
+                            </p>
+                        </div>
+                        <div class="bg-purple-50 rounded-lg p-3">
+                            <div class="flex items-center mb-2">
+                                <i class="fas fa-user text-purple-600 mr-2"></i>
+                                <span class="text-sm font-medium text-gray-700">Туслах багш</span>
+                            </div>
+                            <p class="text-lg font-bold text-purple-600">40%</p>
+                            <p class="text-xs text-gray-600 mt-1 font-mono">
+                                {{ data.instructor_pool|floatformat:0 }}₮ × 40%
+                            </p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-3 italic">
+                        * Хичээл заасан тоогоор хуваарилагдана
+                    </p>
+                </div>
+                {% endif %}
+
+                <!-- Data Source Info -->
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <p class="text-xs text-gray-600">
+                        <i class="fas fa-database mr-1"></i>
+                        <strong>Эх үүсвэр:</strong> 
+                        {{ data.student_count }} сурагчийн 
+                        {% if view_mode == 'month' %}
+                            {{ month_date|date:'Y-m' }} сарын
+                        {% elif view_mode == 'year' %}
+                            {{ year_filter }} оны
+                        {% else %}
+                            нийт
+                        {% endif %}
+                        төлбөрийн бичлэг (PaymentAllocation)
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Instructor Payments (only for month view) -->
+            {% if view_mode == 'month' and data.lead_payments or data.assistant_payments %}
+            <h4 class="text-lg font-semibold text-gray-800 mb-4">Багш нарын төлбөр:</h4>
+            
+            <div class="space-y-4">
+                <!-- Lead Instructors -->
+                {% if data.lead_payments %}
+                <div>
+                    <h5 class="text-md font-medium text-gray-700 mb-2 flex items-center">
+                        <i class="fas fa-user-tie mr-2 text-blue-600"></i>
+                        Ахлах багш нар (60%)
+                    </h5>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Багш</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Хичээл</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Дүн</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Төлөв</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for payment in data.lead_payments %}
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        {{ payment.instructor }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                        {{ payment.total_classes }} хичээл
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-right text-gray-900">
+                                        {{ payment.instructor_share_amount|floatformat:0 }}₮
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                                        {% if payment.is_paid %}
+                                        <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                            <i class="fas fa-check-circle mr-1"></i>Олгосон
+                                        </span>
+                                        {% else %}
+                                        <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                            <i class="fas fa-clock mr-1"></i>Хүлээгдэж буй
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Assistant Instructors -->
+                {% if data.assistant_payments %}
+                <div>
+                    <h5 class="text-md font-medium text-gray-700 mb-2 flex items-center">
+                        <i class="fas fa-user mr-2 text-purple-600"></i>
+                        Туслах багш нар (40%)
+                    </h5>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Багш</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Хичээл</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Дүн</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Төлөв</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for payment in data.assistant_payments %}
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        {{ payment.instructor }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                        {{ payment.total_classes }} хичээл
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-right text-gray-900">
+                                        {{ payment.instructor_share_amount|floatformat:0 }}₮
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                                        {% if payment.is_paid %}
+                                        <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                            <i class="fas fa-check-circle mr-1"></i>Олгосон
+                                        </span>
+                                        {% else %}
+                                        <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                            <i class="fas fa-clock mr-1"></i>Хүлээгдэж буй
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-8">
+                <i class="fas fa-info-circle mr-2"></i>
+                {% if view_mode == 'month' %}
+                Багш нарын төлбөрийн мэдээлэл хараахын тулд <code class="bg-gray-100 px-2 py-1 rounded text-sm">calculate_monthly_payments</code> командыг ажиллуулна уу.
+                {% elif view_mode == 'year' %}
+                Жилийн тайланд багш нарын дэлгэрэнгүй мэдээлэл харагдахгүй. Сараар харна уу.
+                {% else %}
+                Нийт тайланд багш нарын дэлгэрэнгүй мэдээлэл харагдахгүй. Сараар харна уу.
+                {% endif %}
+            </p>
+            {% endif %}
+        </div>
+    </div>
+    {% empty %}
+    <div class="bg-white rounded-lg shadow-sm p-12 text-center">
+        <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
+        <p class="text-gray-500 text-lg">Тайлан байхгүй байна</p>
+        <p class="text-gray-400 text-sm mt-2">
+            {% if view_mode == 'month' %}
+            Сонгосон сард төлбөрийн мэдээлэл байхгүй байна
+            {% elif view_mode == 'year' %}
+            Сонгосон жилд төлбөрийн мэдээлэл байхгүй байна
+            {% else %}
+            Системд төлбөрийн мэдээлэл байхгүй байна
+            {% endif %}
+        </p>
+        {% if view_mode == 'month' %}
+        <div class="mt-6">
+            <code class="bg-gray-100 px-4 py-2 rounded text-sm">
+                python manage.py calculate_monthly_payments --month {{ month_date|date:'Y-m' }}
+            </code>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

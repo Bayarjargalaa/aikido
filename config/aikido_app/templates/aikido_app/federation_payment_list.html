@@ -1,0 +1,118 @@
+{% extends 'aikido_app/base.html' %}
+
+{% block title %}Холбооны төлбөр - Айкидо Сургалт{% endblock %}
+{% block page_title %}Холбооны төлбөрийн жагсаалт{% endblock %}
+{% block page_subtitle %}Монголын айкидогийн холбоонд олгох төлбөр{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <p class="text-sm text-gray-600 mb-2">Нийт дүн</p>
+            <p class="text-2xl font-bold text-gray-900">{{ total_amount|floatformat:0 }}₮</p>
+        </div>
+        <div class="bg-green-50 rounded-lg shadow p-6">
+            <p class="text-sm text-gray-600 mb-2">Олгосон</p>
+            <p class="text-2xl font-bold text-green-600">{{ paid_amount|floatformat:0 }}₮</p>
+        </div>
+        <div class="bg-yellow-50 rounded-lg shadow p-6">
+            <p class="text-sm text-gray-600 mb-2">Үлдэгдэл</p>
+            <p class="text-2xl font-bold text-yellow-600">{{ unpaid_amount|floatformat:0 }}₮</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <form method="GET" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input type="month" name="month" value="{{ filters.month }}" 
+                   class="px-4 py-2 border rounded-lg" placeholder="Сар">
+            <select name="class_type" class="px-4 py-2 border rounded-lg">
+                <option value="">-- Бүх анги --</option>
+                {% for ct in class_types %}
+                <option value="{{ ct.id }}" {% if filters.class_type == ct.id|stringformat:"s" %}selected{% endif %}>
+                    {{ ct.get_name_display }}
+                </option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                <i class="fas fa-search mr-2"></i>Хайх
+            </button>
+        </form>
+    </div>
+
+    <!-- Payments Table -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Анги</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Сар</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Цуглуулсан</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Холбооны хувь</th>
+                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Төлөв</th>
+                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Үйлдэл</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for payment in payments %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {{ payment.class_type.get_name_display }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {{ payment.month|date:"Y-m" }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">
+                        {{ payment.total_payment_collected|floatformat:0 }}₮
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-right text-gray-900">
+                        {{ payment.federation_share_amount|floatformat:0 }}₮
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                        {% if payment.is_paid %}
+                        <div class="flex flex-col items-center space-y-1">
+                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                Олгосон
+                            </span>
+                            {% if payment.paid_date %}
+                            <div class="text-xs text-gray-500">{{ payment.paid_date|date:"Y-m-d" }}</div>
+                            {% endif %}
+                            {% if payment.bank_transaction %}
+                            <a href="{% url 'bank_transaction_match' payment.bank_transaction.id %}" 
+                               class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                               title="Холбогдсон банкны гүйлгээ">
+                                <i class="fas fa-link mr-1"></i>
+                                {{ payment.bank_transaction.transaction_date|date:"Y-m-d" }}
+                            </a>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Хүлээгдэж буй
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                        {% if not payment.is_paid %}
+                        <a href="{% url 'mark_federation_payment_paid' payment.id %}"
+                           class="text-green-600 hover:text-green-900" 
+                           title="Олгосон гэж тэмдэглэх">
+                            <i class="fas fa-check-circle"></i>
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                        <i class="fas fa-inbox text-4xl mb-4"></i>
+                        <p>Төлбөрийн мэдээлэл байхгүй</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -6,6 +6,7 @@
 
 {% block content %}
 <!-- Filter and Add Bar -->
+{% if user.is_staff or not user.instructor_profile %}
 <div class="bg-white rounded-xl shadow-lg p-4 lg:p-6 mb-6">
     <div class="flex flex-col gap-4">
         <!-- Filters -->
@@ -37,6 +38,15 @@
         </a>
     </div>
 </div>
+{% else %}
+<!-- Instructor User View - No Filters, Just Title -->
+<div class="bg-white rounded-xl shadow-lg p-4 lg:p-6 mb-6">
+    <h2 class="text-xl font-bold text-gray-800">
+        <i class="fas fa-user-circle mr-2 text-purple-600"></i>
+        Миний мэдээлэл
+    </h2>
+</div>
+{% endif %}
 
 {% if messages %}
 <div class="mb-6">
@@ -185,6 +195,7 @@
         </div>
 
         <!-- Action Buttons -->
+        {% if user.is_staff or not user.instructor_profile %}
         <div class="flex gap-2 mt-4 pt-4 border-t">
             <a href="{% url 'instructor_edit' instructor.pk %}" 
                class="flex-1 px-4 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-100 transition-colors duration-200 text-center">
@@ -195,6 +206,7 @@
                 <i class="fas fa-trash mr-1"></i> Устгах
             </button>
         </div>
+        {% endif %}
     </div>
     {% empty %}
     <div class="col-span-full text-center py-12 bg-white rounded-xl shadow-lg">

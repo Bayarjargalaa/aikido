@@ -3,7 +3,8 @@ from .models import (
     Student, Instructor, ClassType, ClassSession, InstructorAssignment, 
     Attendance, Payment, RankHistory, BankTransaction, PaymentAllocation,
     IncomeCategory, IncomeAllocation, ExpenseCategory, ExpenseAllocation,
-    Seminar, SeminarPaymentAllocation, MembershipPaymentAllocation
+    Seminar, SeminarPaymentAllocation, MembershipPaymentAllocation,
+    MonthlyInstructorPayment, MonthlyFederationPayment
 )
 
 
@@ -348,3 +349,22 @@ class MembershipPaymentAllocationAdmin(admin.ModelAdmin):
     )
     
     readonly_fields = ['created_at']
+
+
+@admin.register(MonthlyInstructorPayment)
+class MonthlyInstructorPaymentAdmin(admin.ModelAdmin):
+    list_display = ['instructor', 'class_type', 'month', 'role', 'total_classes', 'instructor_share_amount', 'is_paid', 'paid_date', 'bank_transaction']
+    list_filter = ['is_paid', 'month', 'class_type', 'role']
+    search_fields = ['instructor__first_name', 'instructor__last_name']
+    date_hierarchy = 'month'
+    ordering = ['-month', 'class_type', 'instructor__last_name']
+    raw_id_fields = ['bank_transaction']
+
+
+@admin.register(MonthlyFederationPayment)
+class MonthlyFederationPaymentAdmin(admin.ModelAdmin):
+    list_display = ['class_type', 'month', 'total_payment_collected', 'federation_share_amount', 'is_paid', 'paid_date', 'bank_transaction']
+    list_filter = ['is_paid', 'month', 'class_type']
+    date_hierarchy = 'month'
+    ordering = ['-month', 'class_type']
+    raw_id_fields = ['bank_transaction']

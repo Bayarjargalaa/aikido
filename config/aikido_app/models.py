@@ -35,6 +35,7 @@ class Student(models.Model):
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
+        related_name='student_profile',
         verbose_name="Хэрэглэгч"
     )
     first_name = models.CharField(max_length=100, verbose_name="Нэр")
@@ -156,6 +157,7 @@ class Instructor(models.Model):
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
+        related_name='instructor_profile',
         verbose_name="Хэрэглэгч"
     )
     first_name = models.CharField(max_length=100, verbose_name="Нэр")
@@ -911,3 +913,141 @@ class ExpenseAllocation(models.Model):
     
     def __str__(self):
         return f"{self.expense_category} - {self.expense_date} - {self.amount}₮"
+
+
+class MonthlyInstructorPayment(models.Model):
+    """Багшийн сарын төлбөр - Хичээл заасны төлбөр (сарын төлбөрийн 50%-ийн 60% ахлах, 40% туслах)"""
+    
+    instructor = models.ForeignKey(
+        Instructor,
+        on_delete=models.CASCADE,
+        related_name='monthly_payments',
+        verbose_name="Багш"
+    )
+    class_type = models.ForeignKey(
+        ClassType,
+        on_delete=models.CASCADE,
+        verbose_name="Ангийн төрөл"
+    )
+    month = models.DateField(
+        verbose_name="Сар",
+        help_text="Тухайн сарын эхний өдөр"
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=InstructorAssignment.ROLE_CHOICES,
+        verbose_name="Үүрэг"
+    )
+    total_classes = models.IntegerField(
+        default=0,
+        verbose_name="Нийт хичээлийн тоо",
+        help_text="Тухайн сард заасан хичээлийн тоо"
+    )
+    total_payment_collected = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Цуглуулсан нийт төлбөр",
+        help_text="Энэ ангийн сурагчдаас цуглуулсан сарын төлбөрийн нийт дүн"
+    )
+    instructor_share_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Багшийн хувь",
+        help_text="Багшид олгох төлбөр (50%-ийн 60% эсвэл 40%)"
+    )
+    bank_transaction = models.ForeignKey(
+        BankTransaction,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='instructor_payments',
+        verbose_name="Банкны гүйлгээ",
+        help_text="Төлбөр олгосон банкны гүйлгээ"
+    )
+    is_paid = models.BooleanField(
+        default=False,
+        verbose_name="Олгосон эсэх"
+    )
+    paid_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Олгосон огноо"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Тэмдэглэл"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Шинэчилсэн огноо")
+    
+    class Meta:
+        verbose_name = "Багшийн сарын төлбөр"
+        verbose_name_plural = "Багшийн сарын төлбөрүүд"
+        ordering = ['-month', 'class_type', 'instructor']
+        unique_together = ['instructor', 'class_type', 'month', 'role']
+    
+    def __str__(self):
+        return f"{self.instructor} - {self.class_type} - {self.month.strftime('%Y-%m')} - {self.get_role_display()} - {self.instructor_share_amount}₮"
+
+
+class MonthlyFederationPayment(models.Model):
+    """Холбооны сарын төлбөр - Монголын айкидогийн холбоонд өгөх (сарын төлбөрийн 50%)"""
+    
+    class_type = models.ForeignKey(
+        ClassType,
+        on_delete=models.CASCADE,
+        verbose_name="Ангийн төрөл"
+    )
+    month = models.DateField(
+        verbose_name="Сар",
+        help_text="Тухайн сарын эхний өдөр"
+    )
+    total_payment_collected = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Цуглуулсан нийт төлбөр",
+        help_text="Энэ ангийн сурагчдаас цуглуулсан сарын төлбөрийн нийт дүн"
+    )
+    federation_share_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Холбооны хувь",
+        help_text="Холбоонд олгох төлбөр (50%)"
+    )
+    bank_transaction = models.ForeignKey(
+        BankTransaction,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='federation_payments',
+        verbose_name="Банкны гүйлгээ",
+        help_text="Төлбөр олгосон банкны гүйлгээ"
+    )
+    is_paid = models.BooleanField(
+        default=False,
+        verbose_name="Олгосон эсэх"
+    )
+    paid_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Олгосон огноо"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Тэмдэглэл"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Шинэчилсэн огноо")
+    
+    class Meta:
+        verbose_name = "Холбооны сарын төлбөр"
+        verbose_name_plural = "Холбооны сарын төлбөрүүд"
+        ordering = ['-month', 'class_type']
+        unique_together = ['class_type', 'month']
+    
+    def __str__(self):
+        return f"{self.class_type} - {self.month.strftime('%Y-%m')} - {self.federation_share_amount}₮"
