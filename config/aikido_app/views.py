@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login as auth_login, logout as aut
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, F
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime, timedelta
@@ -16,7 +16,8 @@ from .models import (
     ClassType, InstructorAssignment, BankTransaction, PaymentAllocation,
     IncomeCategory, IncomeAllocation, ExpenseCategory, ExpenseAllocation,
     Seminar, SeminarPaymentAllocation, MembershipPaymentAllocation,
-    MonthlyInstructorPayment, MonthlyFederationPayment
+    MonthlyInstructorPayment, MonthlyFederationPayment, InstructorPaymentAllocation,
+    PaymentCellComment
 )
 from .forms import BankTransactionUploadForm, PaymentAllocationForm
 
@@ -412,12 +413,20 @@ def instructor_create(request):
                     current_rank_date=current_rank_date if current_rank_date else None,
                     is_active=is_active
                 )
+                
+                # Set allowed class types
+                allowed_class_type_ids = request.POST.getlist('allowed_class_types')
+                instructor.allowed_class_types.set(allowed_class_type_ids)
+                
                 messages.success(request, f'{instructor} амжилттай бүртгэгдлээ!')
                 return redirect('instructor_list')
             except Exception as e:
                 messages.error(request, f'Алдаа гарлаа: {str(e)}')
     
-    return render(request, 'aikido_app/instructor_form.html')
+    context = {
+        'class_types': ClassType.objects.all(),
+    }
+    return render(request, 'aikido_app/instructor_form.html', context)
 
 
 @login_required
@@ -445,12 +454,21 @@ def instructor_edit(request, pk):
         
         try:
             instructor.save()
+            
+            # Update allowed class types
+            allowed_class_type_ids = request.POST.getlist('allowed_class_types')
+            instructor.allowed_class_types.set(allowed_class_type_ids)
+            
             messages.success(request, f'{instructor} амжилттай шинэчлэгдлээ!')
             return redirect('instructor_list')
         except Exception as e:
             messages.error(request, f'Алдаа гарлаа: {str(e)}')
     
-    return render(request, 'aikido_app/instructor_form.html', {'instructor': instructor})
+    context = {
+        'instructor': instructor,
+        'class_types': ClassType.objects.all(),
+    }
+    return render(request, 'aikido_app/instructor_form.html', context)
 
 
 @login_required
@@ -664,25 +682,90 @@ def membership_payment_list(request):
 def payment_list(request):
     """Төлбөрийн жагсаалт - Pivot хүснэгт хэлбэрээр"""
     from collections import defaultdict
-    from datetime import datetime
+    from datetime import datetime, date
     
-    # Get all payment allocations
-    allocations = PaymentAllocation.objects.select_related(
+    # Get selected year from request, default to current year
+    selected_year = int(request.GET.get('year', datetime.now().year))
+    
+    # Handle POST request for updating cell comments
+    if request.method == 'POST' and request.POST.get('action') == 'update_cell':
+        student_id = request.POST.get('student_id')
+        month_str = request.POST.get('month')
+        comment = request.POST.get('comment', '')
+        highlight_color = request.POST.get('highlight_color', '')
+        
+        try:
+            student = Student.objects.get(id=student_id)
+            month_date = datetime.strptime(month_str, '%Y-%m-%d').date()
+            
+            # Get or create cell comment
+            cell_comment, created = PaymentCellComment.objects.get_or_create(
+                student=student,
+                month=month_date,
+                defaults={'comment': comment, 'highlight_color': highlight_color}
+            )
+            
+            if not created:
+                cell_comment.comment = comment
+                cell_comment.highlight_color = highlight_color
+                cell_comment.save()
+            
+            messages.success(request, 'Мэдээлэл шинэчлэгдлээ!')
+        except (Student.DoesNotExist, ValueError) as e:
+            messages.error(request, f'Алдаа гарлаа: {str(e)}')
+        
+        from django.urls import reverse
+        redirect_url = reverse('payment_list') + f'?year={selected_year}'
+        return redirect(redirect_url)
+    
+    # Filter allocations by selected year
+    allocations = PaymentAllocation.objects.filter(
+        payment_month__year=selected_year
+    ).select_related(
         'bank_transaction', 'student'
     ).prefetch_related('student__class_types').order_by(
         'student__class_types__name', 'student__first_name', 'student__last_name',  'payment_month'
     )
     
-    # Get all students who have payments
-    students = Student.objects.filter(
-        payment_allocations__isnull=False
-    ).prefetch_related('class_types').distinct().order_by('first_name', 'last_name')
+    # Get all students (both with and without payments)
+    all_students = Student.objects.prefetch_related('class_types').distinct().order_by('first_name', 'last_name')
     
-    # Get all unique payment months
-    months = PaymentAllocation.objects.dates('payment_month', 'month', order='ASC')
+    # Get attendance data grouped by student and month for selected year
+    from django.db.models import Count, Q
+    attendance_data = defaultdict(dict)
+    
+    # Get attendance records for selected year
+    attendances = Attendance.objects.filter(
+        is_present=True,
+        session__date__year=selected_year
+    ).select_related('session', 'student').order_by('session__date')
+    
+    for attendance in attendances:
+        student_id = attendance.student.id
+        # Get year-month from session date
+        session_date = attendance.session.date
+        month_key = date(session_date.year, session_date.month, 1)
+        
+        if month_key not in attendance_data[student_id]:
+            attendance_data[student_id][month_key] = 0
+        attendance_data[student_id][month_key] += 1
+    
+    # Create fixed months for selected year (January to December)
+    months = [date(selected_year, month, 1) for month in range(1, 13)]
+    
+    # Get all cell comments for selected year
+    cell_comments = {}
+    for comment in PaymentCellComment.objects.filter(
+        month__year=selected_year
+    ).select_related('student').all():
+        key = (comment.student.id, comment.month)
+        cell_comments[key] = {
+            'comment': comment.comment,
+            'highlight_color': comment.highlight_color
+        }
     
     # Build pivot data structure
-    # pivot_data[student_id][month_date] = {'amount': X, 'date': Y, 'allocation_id': Z}
+    # pivot_data[student_id][month_date] = {'amount': X, 'date': Y, 'allocations': [], 'attendance': N}
     pivot_data = defaultdict(dict)
     
     for allocation in allocations:
@@ -693,19 +776,50 @@ def payment_list(request):
             pivot_data[student_id][month_key] = {
                 'amount': 0,
                 'date': allocation.bank_transaction.transaction_date if allocation.bank_transaction else None,
-                'allocations': []
+                'allocations': [],
+                'total_attendance': 0,
+                'actual_attendance': attendance_data.get(student_id, {}).get(month_key, 0),
+                'comments': [],
+                'highlight_color': ''
             }
         
         pivot_data[student_id][month_key]['amount'] += allocation.amount
+        pivot_data[student_id][month_key]['total_attendance'] += allocation.attendance_count
+        if allocation.comment:
+            pivot_data[student_id][month_key]['comments'].append(allocation.comment)
+        if allocation.highlight_color and not pivot_data[student_id][month_key]['highlight_color']:
+            pivot_data[student_id][month_key]['highlight_color'] = allocation.highlight_color
+        
         pivot_data[student_id][month_key]['allocations'].append({
             'id': allocation.id,
-            'amount': allocation.amount,
-            'date': allocation.bank_transaction.transaction_date if allocation.bank_transaction else None
+            'amount': float(allocation.amount),
+            'date': allocation.bank_transaction.transaction_date.strftime('%Y-%m-%d') if allocation.bank_transaction and allocation.bank_transaction.transaction_date else None,
+            'attendance_count': allocation.attendance_count,
+            'comment': allocation.comment or '',
+            'highlight_color': allocation.highlight_color or ''
         })
+    
+    # Add attendance data for months without payments
+    for student_id, month_attendance in attendance_data.items():
+        for month_key, attendance_count in month_attendance.items():
+            if month_key not in pivot_data[student_id]:
+                pivot_data[student_id][month_key] = {
+                    'amount': 0,
+                    'date': None,
+                    'allocations': [],
+                    'total_attendance': 0,
+                    'actual_attendance': attendance_count,
+                    'comments': [],
+                    'highlight_color': ''
+                }
+            else:
+                # Update actual attendance if not set
+                if 'actual_attendance' not in pivot_data[student_id][month_key]:
+                    pivot_data[student_id][month_key]['actual_attendance'] = attendance_count
     
     # Group students by class type
     class_groups = defaultdict(list)
-    for student in students:
+    for student in all_students:
         student_classes = student.class_types.all()
         if student_classes:
             for class_type in student_classes:
@@ -727,12 +841,41 @@ def payment_list(request):
                 'row_total': 0
             }
             for month in months:
+                # Get cell comment for this student-month combination
+                cell_comment_data = cell_comments.get((student.id, month), {})
+                
                 if month in pivot_data[student.id]:
-                    month_data = pivot_data[student.id][month]
+                    month_data = pivot_data[student.id][month].copy()
+                    # Apply cell comment if exists (overrides allocation-based color/comment)
+                    if cell_comment_data:
+                        if cell_comment_data.get('highlight_color'):
+                            month_data['highlight_color'] = cell_comment_data['highlight_color']
+                        if cell_comment_data.get('comment'):
+                            if month_data['comments']:
+                                month_data['comments'].append(cell_comment_data['comment'])
+                            else:
+                                month_data['comments'] = [cell_comment_data['comment']]
+                    # Convert allocations to JSON string for template
+                    month_data['allocations_json'] = json.dumps(month_data['allocations'])
+                    month_data['month_str'] = month.strftime('%Y-%m-%d')
+                    month_data['has_data'] = True
                     row['months'].append(month_data)
                     row['row_total'] += month_data['amount']
                 else:
-                    row['months'].append(None)
+                    # No payment/attendance, but may have cell comment
+                    month_data = {
+                        'amount': 0,
+                        'date': None,
+                        'allocations': [],
+                        'allocations_json': '[]',
+                        'total_attendance': 0,
+                        'actual_attendance': 0,
+                        'comments': [cell_comment_data.get('comment')] if cell_comment_data.get('comment') else [],
+                        'highlight_color': cell_comment_data.get('highlight_color', ''),
+                        'month_str': month.strftime('%Y-%m-%d'),
+                        'has_data': bool(cell_comment_data)
+                    }
+                    row['months'].append(month_data)
             rows.append(row)
             group_total += row['row_total']
         
@@ -756,22 +899,38 @@ def payment_list(request):
     for month in months:
         month_total = sum(
             pivot_data[student.id].get(month, {}).get('amount', 0)
-            for student in students
+            for student in all_students
         )
         column_totals.append(month_total)
     
-    # Calculate summary
+    # Calculate summary for selected year
     from django.db.models import Sum, Count
-    summary = PaymentAllocation.objects.aggregate(
+    summary = PaymentAllocation.objects.filter(
+        payment_month__year=selected_year
+    ).aggregate(
         total_amount=Sum('amount'),
         total_count=Count('id')
     )
+    
+    # Get available years for dropdown
+    available_years = PaymentAllocation.objects.dates('payment_month', 'year', order='DESC')
+    years_list = sorted(set([d.year for d in available_years]), reverse=True)
+    if selected_year not in years_list and allocations.exists():
+        years_list.append(selected_year)
+        years_list.sort(reverse=True)
+    
+    # Add current year if not in list
+    current_year = datetime.now().year
+    if current_year not in years_list:
+        years_list.insert(0, current_year)
     
     context = {
         'groups': groups,
         'months': months,
         'column_totals': column_totals,
         'summary': summary,
+        'selected_year': selected_year,
+        'years_list': years_list,
     }
     return render(request, 'aikido_app/payment_list.html', context)
 
@@ -1598,13 +1757,16 @@ def delete_payment_allocation(request, allocation_id):
     """Төлбөрийн хуваарилалт устгах"""
     allocation = get_object_or_404(PaymentAllocation, id=allocation_id)
     transaction_id = allocation.bank_transaction.id
-    allocation.delete()
     
-    # Update transaction status
-    transaction = BankTransaction.objects.get(id=transaction_id)
-    transaction.update_status()
+    if request.method == 'POST':
+        allocation.delete()
+        
+        # Update transaction status
+        transaction = BankTransaction.objects.get(id=transaction_id)
+        transaction.update_status()
+        
+        messages.success(request, 'Төлбөрийн хуваарилалт устгагдлаа!')
     
-    messages.success(request, 'Төлбөрийн хуваарилалт устгагдлаа!')
     return redirect('bank_transaction_match', transaction_id=transaction_id)
 
 @login_required
@@ -1612,13 +1774,71 @@ def delete_expense_allocation(request, allocation_id):
     """Зардлын хуваарилалт устгах"""
     allocation = get_object_or_404(ExpenseAllocation, id=allocation_id)
     transaction_id = allocation.bank_transaction.id
-    allocation.delete()
     
-    # Update transaction status
-    transaction = BankTransaction.objects.get(id=transaction_id)
-    transaction.update_status()
+    if request.method == 'POST':
+        allocation.delete()
+        
+        # Update transaction status
+        transaction = BankTransaction.objects.get(id=transaction_id)
+        transaction.update_status()
+        
+        messages.success(request, 'Зардлын хуваарилалт устгагдлаа!')
     
-    messages.success(request, 'Зардлын хуваарилалт устгагдлаа!')
+    return redirect('bank_transaction_match', transaction_id=transaction_id)
+
+@login_required
+def delete_instructor_payment_allocation(request, allocation_id):
+    """Багшийн төлбөрийн хуваарилалт устгах"""
+    allocation = get_object_or_404(InstructorPaymentAllocation, id=allocation_id)
+    transaction_id = allocation.bank_transaction.id
+    instructor_payment = allocation.instructor_payment
+    
+    if request.method == 'POST':
+        allocation.delete()
+        
+        # Update instructor payment's paid_amount
+        instructor_payment.update_paid_amount()
+        
+        # Update transaction status
+        transaction = BankTransaction.objects.get(id=transaction_id)
+        transaction.update_status()
+        
+        messages.success(request, 'Багшийн төлбөрийн хуваарилалт устгагдлаа!')
+    
+    return redirect('bank_transaction_match', transaction_id=transaction_id)
+
+@login_required
+def delete_seminar_payment_allocation(request, allocation_id):
+    """Семинарын төлбөрийн хуваарилалт устгах"""
+    allocation = get_object_or_404(SeminarPaymentAllocation, id=allocation_id)
+    transaction_id = allocation.bank_transaction.id
+    
+    if request.method == 'POST':
+        allocation.delete()
+        
+        # Update transaction status
+        transaction = BankTransaction.objects.get(id=transaction_id)
+        transaction.update_status()
+        
+        messages.success(request, 'Семинарын төлбөрийн хуваарилалт устгагдлаа!')
+    
+    return redirect('bank_transaction_match', transaction_id=transaction_id)
+
+@login_required
+def delete_membership_payment_allocation(request, allocation_id):
+    """Гишүүнчлэлийн төлбөрийн хуваарилалт устгах"""
+    allocation = get_object_or_404(MembershipPaymentAllocation, id=allocation_id)
+    transaction_id = allocation.bank_transaction.id
+    
+    if request.method == 'POST':
+        allocation.delete()
+        
+        # Update transaction status
+        transaction = BankTransaction.objects.get(id=transaction_id)
+        transaction.update_status()
+        
+        messages.success(request, 'Гишүүнчлэлийн төлбөрийн хуваарилалт устгагдлаа!')
+    
     return redirect('bank_transaction_match', transaction_id=transaction_id)
 
 @login_required
@@ -1829,19 +2049,43 @@ def bank_transaction_match(request, transaction_id):
             expense_type = request.POST.get('expense_type', 'regular')
             
             if expense_type == 'instructor_payment':
-                # Handle instructor payment linking
+                # Handle instructor payment allocation (partial payments allowed)
                 payment_ids = request.POST.getlist('instructor_payment_id[]')
+                amounts = request.POST.getlist('instructor_payment_amount[]')
+                notes_list = request.POST.getlist('instructor_payment_notes[]')
                 
-                for payment_id in payment_ids:
-                    if payment_id:
+                instructor = None
+                if hasattr(request.user, 'instructor_profile'):
+                    instructor = request.user.instructor_profile
+                
+                for i, payment_id in enumerate(payment_ids):
+                    if payment_id and i < len(amounts) and amounts[i]:
                         try:
                             payment = MonthlyInstructorPayment.objects.get(id=payment_id)
-                            payment.bank_transaction = transaction
-                            payment.is_paid = True
-                            payment.paid_date = datetime.now().date()
-                            payment.save()
+                            amount = Decimal(amounts[i])
+                            
+                            # Validate amount doesn't exceed remaining
+                            remaining = payment.get_remaining_amount()
+                            if amount > remaining:
+                                messages.error(request, f'{payment.instructor}-ийн төлбөр: {amount}₮ нь үлдэгдэл {remaining}₮-с их байна!')
+                                continue
+                            
+                            # Create allocation
+                            InstructorPaymentAllocation.objects.create(
+                                bank_transaction=transaction,
+                                instructor_payment=payment,
+                                amount=amount,
+                                notes=notes_list[i] if i < len(notes_list) else '',
+                                created_by=instructor
+                            )
+                            
+                            # Update payment's paid_amount
+                            payment.update_paid_amount()
+                            
                         except MonthlyInstructorPayment.DoesNotExist:
                             messages.error(request, f'Төлбөр #{payment_id} олдсонгүй!')
+                        except Exception as e:
+                            messages.error(request, f'Алдаа гарлаа: {str(e)}')
                 
                 messages.success(request, 'Багшийн төлбөр амжилттай холбогдлоо!')
                 
@@ -1948,10 +2192,11 @@ def bank_transaction_match(request, transaction_id):
     elif is_expense:
         expense_categories = ExpenseCategory.objects.all().order_by('name')
         expense_allocations = transaction.expense_allocations.all()
+        instructor_payment_allocations = transaction.instructor_payment_allocations.all()
         
-        # Get unpaid instructor and federation payments for this transaction to link
+        # Get unpaid/partially paid instructor and federation payments
         unpaid_instructor_payments = MonthlyInstructorPayment.objects.filter(
-            is_paid=False
+            paid_amount__lt=F('instructor_share_amount')
         ).select_related('instructor', 'class_type').order_by('-month', 'instructor__last_name')
         
         unpaid_federation_payments = MonthlyFederationPayment.objects.filter(
@@ -1961,6 +2206,7 @@ def bank_transaction_match(request, transaction_id):
         context.update({
             'expense_categories': expense_categories,
             'expense_allocations': expense_allocations,
+            'instructor_payment_allocations': instructor_payment_allocations,
             'unpaid_instructor_payments': unpaid_instructor_payments,
             'unpaid_federation_payments': unpaid_federation_payments,
         })
@@ -1971,6 +2217,9 @@ def bank_transaction_match(request, transaction_id):
 @login_required
 def monthly_payment_report(request):
     """Сарын төлбөрийн тайлан - Багш болон холбооны хуваарилалт"""
+    # Check if user is an instructor (non-staff)
+    is_instructor_user = hasattr(request.user, 'instructor_profile') and not request.user.is_staff
+    
     # Get filter parameters
     month_str = request.GET.get('month')
     year_str = request.GET.get('year')
@@ -2000,8 +2249,16 @@ def monthly_payment_report(request):
             year_filter = datetime.now().year
     # else: view_mode == 'all' - no filters
     
-    # Get all class types
-    class_types = ClassType.objects.all()
+    # Get all class types or filter by instructor's allowed class types
+    if is_instructor_user:
+        instructor_profile = request.user.instructor_profile
+        allowed_class_types = instructor_profile.allowed_class_types.all()
+        if allowed_class_types.exists():
+            class_types = allowed_class_types
+        else:
+            class_types = ClassType.objects.all()
+    else:
+        class_types = ClassType.objects.all()
     
     # Build report data for each class type
     report_data = []
@@ -2089,6 +2346,7 @@ def instructor_payment_list(request):
     """Багшийн төлбөрийн жагсаалт"""
     # Check if user is an instructor (non-staff)
     is_instructor_user = hasattr(request.user, 'instructor_profile') and not request.user.is_staff
+    can_view_all = False
     
     # Filter options
     month_str = request.GET.get('month')
@@ -2101,11 +2359,28 @@ def instructor_payment_list(request):
         'instructor', 'class_type'
     ).order_by('-month', 'class_type', 'instructor__last_name')
     
-    # If instructor user, filter to only their payments
+    # If instructor user, check permissions
     if is_instructor_user:
-        payments = payments.filter(instructor=request.user.instructor_profile)
-        # Don't allow them to filter by other instructors
-        instructor_id = None
+        instructor_profile = request.user.instructor_profile
+        
+        # Check if can view all payments
+        if instructor_profile.can_view_all_payments:
+            can_view_all = True
+            # Can see all instructors but still respect class type restrictions
+            allowed_class_types = instructor_profile.allowed_class_types.all()
+            if allowed_class_types.exists():
+                payments = payments.filter(class_type__in=allowed_class_types)
+        else:
+            # Only their own payments
+            payments = payments.filter(instructor=instructor_profile)
+            
+            # Further filter by allowed class types if set
+            allowed_class_types = instructor_profile.allowed_class_types.all()
+            if allowed_class_types.exists():
+                payments = payments.filter(class_type__in=allowed_class_types)
+            
+            # Don't allow them to filter by other instructors
+            instructor_id = None
     
     # Apply filters
     if month_str:
@@ -2194,6 +2469,7 @@ def instructor_payment_list(request):
         'calculation_details': calculation_details,
         'selected_month': month_str,
         'is_instructor_user': is_instructor_user,
+        'can_view_all': can_view_all,
         'filters': {
             'month': month_str,
             'instructor': instructor_id,

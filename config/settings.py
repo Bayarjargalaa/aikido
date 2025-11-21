@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-$2x3e#uh^1hj2w&(kt_%-z%9(fz4=_t*_-pm%%hc*6@uv3dpu*
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['202.179.22.189']
+ALLOWED_HOSTS = ['202.179.22.189', 'localhost', '127.0.0.1', '0.0.0.0']
 
 
 # Application definition
@@ -52,6 +52,20 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'config.urls'
 
+# CSRF settings for development
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8011',
+    'http://127.0.0.1:8011',
+    'http://202.179.22.189:8011',
+]
+
+# For development - allow CSRF from any localhost origin
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = False
+SESSION_COOKIE_SAMESITE = 'Lax'
+
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
     'config.aikido_app.backends.EmailBackend',  # Имэйл ашиглан нэвтрэх
@@ -70,9 +84,11 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
+                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.csrf',
             ],
         },
     },

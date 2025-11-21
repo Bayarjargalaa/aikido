@@ -55,7 +55,7 @@
     </div>
 
     <!-- Filters with Better Design -->
-    {% if not is_instructor_user %}
+    {% if not is_instructor_user or can_view_all %}
     <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
         <div class="flex items-center mb-4">
             <i class="fas fa-filter text-blue-600 text-xl mr-3"></i>
@@ -104,7 +104,7 @@
             </div>
         </form>
     </div>
-    {% else %}
+    {% elif is_instructor_user %}
     <!-- Simple Month Filter for Instructors -->
     <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
         <div class="flex items-center mb-4">
@@ -245,6 +245,23 @@
                         <td class="px-6 py-4 whitespace-nowrap text-right">
                             <div class="flex flex-col items-end space-y-1">
                                 <span class="text-lg font-bold text-gray-900">{{ payment.instructor_share_amount|floatformat:0 }}₮</span>
+                                
+                                <!-- Хэсэгчлэн төлсөн мэдээлэл -->
+                                {% if payment.paid_amount > 0 %}
+                                <div class="text-xs space-y-1 mt-2">
+                                    <div class="bg-green-50 px-2 py-1 rounded border border-green-200">
+                                        <span class="text-green-700 font-semibold">Төлсөн:</span>
+                                        <span class="text-green-900 font-bold">{{ payment.paid_amount|floatformat:0 }}₮</span>
+                                    </div>
+                                    {% if payment.get_remaining_amount > 0 %}
+                                    <div class="bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                                        <span class="text-amber-700 font-semibold">Үлдэгдэл:</span>
+                                        <span class="text-amber-900 font-bold">{{ payment.get_remaining_amount|floatformat:0 }}₮</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                
                                 {% if calculation_details %}
                                     {% for detail in calculation_details %}
                                         {% if detail.class_type.id == payment.class_type.id %}
@@ -272,24 +289,41 @@
                             {% if payment.is_paid %}
                             <div class="flex flex-col items-center space-y-1">
                                 <span class="px-4 py-2 inline-flex items-center text-sm font-semibold rounded-lg bg-green-100 text-green-800 border border-green-200">
-                                    <i class="fas fa-check-circle mr-2"></i>Олгосон
+                                    <i class="fas fa-check-circle mr-2"></i>Бүрэн олгосон
                                 </span>
                                 {% if payment.paid_date %}
                                 <div class="text-xs text-gray-500">{{ payment.paid_date|date:"Y-m-d" }}</div>
                                 {% endif %}
-                                {% if payment.bank_transaction %}
-                                <a href="{% url 'bank_transaction_match' payment.bank_transaction.id %}" 
-                                   class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
-                                   title="Холбогдсон банкны гүйлгээ">
-                                    <i class="fas fa-link mr-1"></i>
-                                    {{ payment.bank_transaction.transaction_date|date:"Y-m-d" }}
-                                </a>
-                                {% endif %}
+                            </div>
+                            {% elif payment.paid_amount > 0 %}
+                            <div class="flex flex-col items-center space-y-1">
+                                <span class="px-4 py-2 inline-flex items-center text-sm font-semibold rounded-lg bg-blue-100 text-blue-800 border border-blue-200">
+                                    <i class="fas fa-coins mr-2"></i>Хэсэгчлэн төлсөн
+                                </span>
+                                <div class="text-xs text-blue-600 font-bold">
+                                    {{ payment.paid_amount|floatformat:0 }}₮ / {{ payment.instructor_share_amount|floatformat:0 }}₮
+                                </div>
                             </div>
                             {% else %}
                             <span class="px-4 py-2 inline-flex items-center text-sm font-semibold rounded-lg bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
                                 <i class="fas fa-clock mr-2"></i>Хүлээгдэж буй
                             </span>
+                            {% endif %}
+                            
+                            <!-- Холбогдсон allocation-ууд -->
+                            {% if payment.allocations.exists %}
+                            <div class="mt-2 space-y-1">
+                                {% for allocation in payment.allocations.all %}
+                                <div class="text-xs bg-purple-50 px-2 py-1 rounded border border-purple-200">
+                                    <a href="{% url 'bank_transaction_match' allocation.bank_transaction.id %}" 
+                                       class="text-purple-700 hover:text-purple-900 flex items-center justify-center"
+                                       title="Холбогдсон банкны гүйлгээ">
+                                        <i class="fas fa-link mr-1"></i>
+                                        {{ allocation.bank_transaction.transaction_date|date:"Y-m-d" }}: {{ allocation.amount|floatformat:0 }}₮
+                                    </a>
+                                </div>
+                                {% endfor %}
+                            </div>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-center">

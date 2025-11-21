@@ -151,6 +151,26 @@
                 </div>
             </div>
 
+            <!-- Allowed Class Types -->
+            <div class="mt-6">
+                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                    <i class="fas fa-user-shield mr-2 text-purple-500"></i>Харах эрхтэй ангиуд
+                </label>
+                <p class="text-xs text-gray-500 mb-3">Энэ багш эдгээр ангиудын төлбөрийг харна (хоосон бол бүх ангийг харна)</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {% for class_type in class_types %}
+                    <label class="flex items-center p-3 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-purple-400 cursor-pointer transition-all">
+                        <input type="checkbox" 
+                               name="allowed_class_types" 
+                               value="{{ class_type.id }}"
+                               {% if instructor and class_type in instructor.allowed_class_types.all %}checked{% endif %}
+                               class="w-4 h-4 text-purple-600 rounded focus:ring-2 focus:ring-purple-500 mr-3">
+                        <span class="text-sm font-medium text-gray-700">{{ class_type.get_name_display }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
             <!-- Action Buttons -->
             <div class="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
                 <a href="{% url 'instructor_list' %}" 

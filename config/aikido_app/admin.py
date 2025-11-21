@@ -4,7 +4,8 @@ from .models import (
     Attendance, Payment, RankHistory, BankTransaction, PaymentAllocation,
     IncomeCategory, IncomeAllocation, ExpenseCategory, ExpenseAllocation,
     Seminar, SeminarPaymentAllocation, MembershipPaymentAllocation,
-    MonthlyInstructorPayment, MonthlyFederationPayment
+    MonthlyInstructorPayment, MonthlyFederationPayment, InstructorPaymentAllocation,
+    PaymentCellComment
 )
 
 
@@ -52,10 +53,11 @@ class StudentAdmin(admin.ModelAdmin):
 
 @admin.register(Instructor)
 class InstructorAdmin(admin.ModelAdmin):
-    list_display = ['last_name', 'first_name', 'phone', 'get_rank', 'current_rank_date', 'hire_date', 'is_active']
-    list_filter = ['is_active', 'hire_date', 'kyu_rank', 'dan_rank']
+    list_display = ['last_name', 'first_name', 'phone', 'get_rank', 'current_rank_date', 'hire_date', 'can_view_all_payments', 'is_active']
+    list_filter = ['is_active', 'can_view_all_payments', 'hire_date', 'kyu_rank', 'dan_rank']
     search_fields = ['first_name', 'last_name', 'phone', 'email']
     ordering = ['last_name', 'first_name']
+    filter_horizontal = ['allowed_class_types']
     inlines = [RankHistoryInline]
     
     fieldsets = (
@@ -68,6 +70,10 @@ class InstructorAdmin(admin.ModelAdmin):
         }),
         ('Ажлын мэдээлэл', {
             'fields': ('hire_date', 'is_active')
+        }),
+        ('Эрхийн тохиргоо', {
+            'fields': ('allowed_class_types', 'can_view_all_payments'),
+            'description': 'Багш эдгээр ангиудын төлбөрийг харна (хоосон бол бүх ангийг харна)'
         }),
         ('Хэрэглэгчийн холбоос', {
             'fields': ('user',),
@@ -200,9 +206,9 @@ class BankTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(PaymentAllocation)
 class PaymentAllocationAdmin(admin.ModelAdmin):
-    list_display = ['bank_transaction', 'student', 'payment_month', 'amount', 'created_at']
-    list_filter = ['payment_month', 'created_at']
-    search_fields = ['student__first_name', 'student__last_name', 'bank_transaction__payer_name']
+    list_display = ['bank_transaction', 'student', 'payment_month', 'amount', 'attendance_count', 'highlight_color', 'created_at']
+    list_filter = ['payment_month', 'highlight_color', 'created_at']
+    search_fields = ['student__first_name', 'student__last_name', 'bank_transaction__payer_name', 'comment']
     date_hierarchy = 'payment_month'
     ordering = ['-created_at']
     
@@ -211,10 +217,14 @@ class PaymentAllocationAdmin(admin.ModelAdmin):
             'fields': ('bank_transaction',)
         }),
         ('Хуваарилалт', {
-            'fields': ('student', 'payment_month', 'amount', 'notes')
+            'fields': ('student', 'payment_month', 'amount')
+        }),
+        ('Ирц ба Тайлбар', {
+            'fields': ('attendance_count', 'comment', 'highlight_color'),
+            'description': 'Ирцийн тоо, тайлбар болон онцлох өнгө'
         }),
         ('Бусад', {
-            'fields': ('created_by', 'created_at'),
+            'fields': ('notes', 'created_by', 'created_at'),
             'classes': ('collapse',)
         }),
     )
@@ -353,12 +363,21 @@ class MembershipPaymentAllocationAdmin(admin.ModelAdmin):
 
 @admin.register(MonthlyInstructorPayment)
 class MonthlyInstructorPaymentAdmin(admin.ModelAdmin):
-    list_display = ['instructor', 'class_type', 'month', 'role', 'total_classes', 'instructor_share_amount', 'is_paid', 'paid_date', 'bank_transaction']
+    list_display = ['instructor', 'class_type', 'month', 'role', 'total_classes', 'instructor_share_amount', 'paid_amount', 'is_paid', 'paid_date']
     list_filter = ['is_paid', 'month', 'class_type', 'role']
     search_fields = ['instructor__first_name', 'instructor__last_name']
     date_hierarchy = 'month'
     ordering = ['-month', 'class_type', 'instructor__last_name']
-    raw_id_fields = ['bank_transaction']
+    readonly_fields = ['paid_amount']
+
+
+@admin.register(InstructorPaymentAllocation)
+class InstructorPaymentAllocationAdmin(admin.ModelAdmin):
+    list_display = ['instructor_payment', 'bank_transaction', 'amount', 'created_at', 'created_by']
+    list_filter = ['created_at']
+    search_fields = ['instructor_payment__instructor__first_name', 'instructor_payment__instructor__last_name', 'notes']
+    raw_id_fields = ['bank_transaction', 'instructor_payment']
+    ordering = ['-created_at']
 
 
 @admin.register(MonthlyFederationPayment)
@@ -368,3 +387,19 @@ class MonthlyFederationPaymentAdmin(admin.ModelAdmin):
     date_hierarchy = 'month'
     ordering = ['-month', 'class_type']
     raw_id_fields = ['bank_transaction']
+
+
+@admin.register(PaymentCellComment)
+class PaymentCellCommentAdmin(admin.ModelAdmin):
+    list_display = ['student', 'month', 'highlight_color', 'comment_preview', 'updated_at']
+    list_filter = ['month', 'highlight_color']
+    search_fields = ['student__first_name', 'student__last_name', 'comment']
+    date_hierarchy = 'month'
+    ordering = ['-month', 'student__last_name', 'student__first_name']
+    raw_id_fields = ['student']
+    
+    def comment_preview(self, obj):
+        if obj.comment:
+            return obj.comment[:50] + '...' if len(obj.comment) > 50 else obj.comment
+        return '-'
+    comment_preview.short_description = 'Коммент'

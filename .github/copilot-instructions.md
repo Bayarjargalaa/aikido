@@ -22,16 +22,17 @@
 config/
 ├── settings.py, urls.py, wsgi.py, asgi.py  # Django core
 └── aikido_app/                             # Single app contains all logic
-    ├── models.py                           # 17 models (900+ lines)
-    ├── views.py                            # 50+ views (1900+ lines)
+    ├── models.py                           # 19 models (1015 lines)
+    ├── views.py                            # 50+ views (2310 lines)
     ├── admin.py                            # Django admin configs
     ├── urls.py                             # App-level routes
     ├── backends.py                         # Email authentication
     ├── forms.py                            # Bank upload forms
-    ├── templates/aikido_app/               # 19+ templates
+    ├── templates/aikido_app/               # 23 templates
     ├── templatetags/custom_filters.py      # Custom template filters
     └── management/commands/
-        └── create_class_types.py           # Init ClassType data
+        ├── create_class_types.py           # Init ClassType data
+        └── calculate_monthly_payments.py   # Calculate instructor/federation payments
 ```
 
 ### App Registration Pattern (MANDATORY)
@@ -117,7 +118,7 @@ def get_rank_display_full(self):
    - Redirect to same page if remaining amount > 0
 3. **Delete Allocations**: Individual delete views for each allocation type
 
-### Views Architecture (`views.py` - 1900+ lines)
+### Views Architecture (`views.py` - 2310 lines)
 
 **Authentication**: Custom `EmailBackend` in `backends.py` (email OR username login)
 - `LOGIN_REDIRECT_URL = 'dashboard'`, `LOGIN_URL = 'login'`
@@ -178,10 +179,11 @@ python manage.py calculate_monthly_payments --month 2025-01 --recalculate  # For
 - Inlines: RankHistoryInline for Student/Instructor
 - Custom fieldsets with Mongolian labels
 
-**Custom Templates**: 19 HTML files in `config/aikido_app/templates/aikido_app/`
+**Custom Templates**: 23 HTML files in `config/aikido_app/templates/aikido_app/`
 - `base.html`: Bootstrap-based layout
 - Complex forms: `bank_transaction_match.html` (600+ lines with JavaScript for dynamic allocation rows)
 - CRUD templates: `student_form.html`, `instructor_form.html`
+- Payment reports: `monthly_payment_report.html`, `instructor_payment_list.html`, `federation_payment_list.html`
 
 **Template Tags**: `custom_filters.py` for custom Jinja2 filters
 
@@ -224,7 +226,7 @@ python manage.py calculate_monthly_payments --month 2025-01 --recalculate  # For
 - DEBUG=True in settings - do NOT deploy as-is
 - No static file collection configured (uses Django defaults)
 - Templates use Mongolian text extensively (UTF-8 required)
-- Large view functions (1900+ lines) - consider refactoring for new features
+- Large view functions (2310 lines) - consider refactoring for new features
 - No REST API - all operations via Django templates
 
 ## Documentation Files

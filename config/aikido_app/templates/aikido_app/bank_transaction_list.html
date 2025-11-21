@@ -135,15 +135,58 @@
     {% if transactions %}
     <div class="bg-white rounded-lg shadow-lg overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
+            <table class="min-w-full divide-y divide-gray-200" id="transactionsTable">
                 <thead class="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
                     <tr>
-                        <th class="py-4 px-6 text-left font-semibold">Огноо</th>
-                        <th class="py-4 px-6 text-center font-semibold">Төрөл</th>
-                        <th class="py-4 px-6 text-right font-semibold">Дүн</th>
-                        <th class="py-4 px-6 text-left font-semibold">Харьцсан данс</th>
-                        <th class="py-4 px-6 text-left font-semibold">Утга</th>
-                        <th class="py-4 px-6 text-center font-semibold">Төлөв</th>
+                        <th class="py-4 px-6 text-left font-semibold">
+                            <div class="flex flex-col gap-2">
+                                <span>Огноо</span>
+                                <input type="text" id="filterDate" placeholder="Хайх..." 
+                                       class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
+                            </div>
+                        </th>
+                        <th class="py-4 px-6 text-center font-semibold">
+                            <div class="flex flex-col gap-2">
+                                <span>Төрөл</span>
+                                <select id="filterType" class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
+                                    <option value="">Бүгд</option>
+                                    <option value="орлого">Орлого</option>
+                                    <option value="зардал">Зардал</option>
+                                </select>
+                            </div>
+                        </th>
+                        <th class="py-4 px-6 text-right font-semibold">
+                            <div class="flex flex-col gap-2">
+                                <span>Дүн</span>
+                                <input type="text" id="filterAmount" placeholder="Хайх..." 
+                                       class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
+                            </div>
+                        </th>
+                        <th class="py-4 px-6 text-left font-semibold">
+                            <div class="flex flex-col gap-2">
+                                <span>Харьцсан данс</span>
+                                <input type="text" id="filterAccount" placeholder="Хайх..." 
+                                       class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
+                            </div>
+                        </th>
+                        <th class="py-4 px-6 text-left font-semibold">
+                            <div class="flex flex-col gap-2">
+                                <span>Утга</span>
+                                <input type="text" id="filterDescription" placeholder="Хайх..." 
+                                       class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
+                            </div>
+                        </th>
+                        <th class="py-4 px-6 text-center font-semibold">
+                            <div class="flex flex-col gap-2">
+                                <span>Төлөв</span>
+                                <select id="filterStatus" class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
+                                    <option value="">Бүгд</option>
+                                    <option value="холбоогүй">Холбоогүй</option>
+                                    <option value="холбосон">Холбосон</option>
+                                    <option value="хэсэгчлэн">Хэсэгчлэн</option>
+                                </select>
+                            </div>
+                        </th>
                         <th class="py-4 px-6 text-right font-semibold">Хуваарилсан</th>
                         <th class="py-4 px-6 text-right font-semibold">Үлдсэн</th>
                         <th class="py-4 px-6 text-center font-semibold">Үйлдэл</th>
@@ -236,7 +279,7 @@
                     
                     <!-- Show allocations if any -->
                     {% if transaction.allocations.all or transaction.expense_allocations.all %}
-                    <tr class="bg-gray-50">
+                    <tr class="allocation-row bg-gray-50">
                         <td colspan="9" class="py-3 px-6">
                             <div class="text-sm">
                                 <span class="font-semibold text-gray-700">Хуваарилалт:</span>
@@ -344,4 +387,83 @@
     </div>
     {% endif %}
 </div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const table = document.getElementById('transactionsTable');
+    if (!table) return;
+    
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => !row.classList.contains('allocation-row'));
+    
+    // Filter inputs
+    const filterDate = document.getElementById('filterDate');
+    const filterType = document.getElementById('filterType');
+    const filterAmount = document.getElementById('filterAmount');
+    const filterAccount = document.getElementById('filterAccount');
+    const filterDescription = document.getElementById('filterDescription');
+    const filterStatus = document.getElementById('filterStatus');
+    
+    function filterTable() {
+        const dateValue = filterDate.value.toLowerCase();
+        const typeValue = filterType.value.toLowerCase();
+        const amountValue = filterAmount.value.toLowerCase();
+        const accountValue = filterAccount.value.toLowerCase();
+        const descriptionValue = filterDescription.value.toLowerCase();
+        const statusValue = filterStatus.value.toLowerCase();
+        
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 6) return;
+            
+            // Get cell values
+            const date = cells[0].textContent.toLowerCase();
+            const type = cells[1].textContent.toLowerCase();
+            const amount = cells[2].textContent.toLowerCase();
+            const account = cells[3].textContent.toLowerCase();
+            const description = cells[4].textContent.toLowerCase();
+            const status = cells[5].textContent.toLowerCase();
+            
+            // Check if row matches all filters
+            const matchDate = !dateValue || date.includes(dateValue);
+            const matchType = !typeValue || type.includes(typeValue);
+            const matchAmount = !amountValue || amount.includes(amountValue);
+            const matchAccount = !accountValue || account.includes(accountValue);
+            const matchDescription = !descriptionValue || description.includes(descriptionValue);
+            const matchStatus = !statusValue || status.includes(statusValue);
+            
+            // Show/hide row
+            if (matchDate && matchType && matchAmount && matchAccount && matchDescription && matchStatus) {
+                row.style.display = '';
+                // Also show allocation row if exists
+                const nextRow = row.nextElementSibling;
+                if (nextRow && nextRow.classList.contains('allocation-row')) {
+                    nextRow.style.display = '';
+                }
+            } else {
+                row.style.display = 'none';
+                // Also hide allocation row if exists
+                const nextRow = row.nextElementSibling;
+                if (nextRow && nextRow.classList.contains('allocation-row')) {
+                    nextRow.style.display = 'none';
+                }
+            }
+        });
+        
+        // Update visible count
+        const visibleRows = rows.filter(row => row.style.display !== 'none');
+        console.log(`Showing ${visibleRows.length} of ${rows.length} transactions`);
+    }
+    
+    // Add event listeners
+    if (filterDate) filterDate.addEventListener('keyup', filterTable);
+    if (filterType) filterType.addEventListener('change', filterTable);
+    if (filterAmount) filterAmount.addEventListener('keyup', filterTable);
+    if (filterAccount) filterAccount.addEventListener('keyup', filterTable);
+    if (filterDescription) filterDescription.addEventListener('keyup', filterTable);
+    if (filterStatus) filterStatus.addEventListener('change', filterTable);
+});
+</script>
+{% endblock %}
 {% endblock %}

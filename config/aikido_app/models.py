@@ -183,6 +183,18 @@ class Instructor(models.Model):
         blank=True,
         verbose_name="Одоогийн зэрэг авсан огноо"
     )
+    allowed_class_types = models.ManyToManyField(
+        'ClassType',
+        blank=True,
+        related_name='allowed_instructors',
+        verbose_name="Харах эрхтэй ангиуд",
+        help_text="Энэ багш эдгээр ангиудын төлбөрийг харна (хоосон бол бүх ангийг харна)"
+    )
+    can_view_all_payments = models.BooleanField(
+        default=False,
+        verbose_name="Бүх багшийн цалин харах эрх",
+        help_text="Идэвхжүүлбэл энэ багш бусад багш нарын цалинг харна"
+    )
     
     class Meta:
         verbose_name = "Багш"
@@ -574,9 +586,11 @@ class BankTransaction(models.Model):
             seminar_total = self.seminar_allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
             membership_total = self.membership_allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
             return payment_total + income_total + seminar_total + membership_total
-        # Дебит гүйлгээ бол ExpenseAllocation-оос
+        # Дебит гүйлгээ бол ExpenseAllocation болон InstructorPaymentAllocation-оос
         elif self.debit_amount and self.debit_amount != 0:
-            return self.expense_allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+            expense_total = self.expense_allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+            instructor_payment_total = self.instructor_payment_allocations.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+            return expense_total + instructor_payment_total
         return Decimal('0.00')
     
     def get_remaining_amount(self):
@@ -598,6 +612,18 @@ class BankTransaction(models.Model):
 class PaymentAllocation(models.Model):
     """Төлбөрийн хуваарилалт - Банкны гүйлгээг сурагч + сартай холбох"""
     
+    COLOR_CHOICES = [
+        ('', 'Өнгөгүй'),
+        ('green', 'Ногоон'),
+        ('blue', 'Цэнхэр'),
+        ('yellow', 'Шар'),
+        ('red', 'Улаан'),
+        ('purple', 'Ягаан'),
+        ('pink', 'Ягаан (цайвар)'),
+        ('orange', 'Улбар шар'),
+        ('gray', 'Саарал'),
+    ]
+    
     bank_transaction = models.ForeignKey(
         BankTransaction,
         on_delete=models.CASCADE,
@@ -616,6 +642,22 @@ class PaymentAllocation(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
         verbose_name="Дүн"
+    )
+    attendance_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name="Ирсэн ирцийн тоо"
+    )
+    comment = models.TextField(
+        blank=True,
+        verbose_name="Тайлбар/Коммент"
+    )
+    highlight_color = models.CharField(
+        max_length=20,
+        choices=COLOR_CHOICES,
+        blank=True,
+        default='',
+        verbose_name="Онцлох өнгө"
     )
     notes = models.TextField(
         blank=True,
@@ -915,6 +957,49 @@ class ExpenseAllocation(models.Model):
         return f"{self.expense_category} - {self.expense_date} - {self.amount}₮"
 
 
+class InstructorPaymentAllocation(models.Model):
+    """Багшийн төлбөрийн хуваарилалт - Банкны зардлын гүйлгээг багшийн төлбөртэй холбох"""
+    
+    bank_transaction = models.ForeignKey(
+        BankTransaction,
+        on_delete=models.CASCADE,
+        related_name='instructor_payment_allocations',
+        verbose_name="Банкны гүйлгээ"
+    )
+    instructor_payment = models.ForeignKey(
+        'MonthlyInstructorPayment',
+        on_delete=models.CASCADE,
+        related_name='allocations',
+        verbose_name="Багшийн төлбөр"
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name="Дүн"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Тэмдэглэл"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    created_by = models.ForeignKey(
+        Instructor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Үүсгэсэн хэрэглэгч"
+    )
+    
+    class Meta:
+        verbose_name = "Багшийн төлбөрийн хуваарилалт"
+        verbose_name_plural = "Багшийн төлбөрийн хуваарилалтууд"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.instructor_payment.instructor} - {self.amount}₮"
+
+
 class MonthlyInstructorPayment(models.Model):
     """Багшийн сарын төлбөр - Хичээл заасны төлбөр (сарын төлбөрийн 50%-ийн 60% ахлах, 40% туслах)"""
     
@@ -957,6 +1042,13 @@ class MonthlyInstructorPayment(models.Model):
         verbose_name="Багшийн хувь",
         help_text="Багшид олгох төлбөр (50%-ийн 60% эсвэл 40%)"
     )
+    paid_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Төлсөн дүн",
+        help_text="Одоогоор төлсөн нийт дүн"
+    )
     bank_transaction = models.ForeignKey(
         BankTransaction,
         on_delete=models.SET_NULL,
@@ -990,6 +1082,32 @@ class MonthlyInstructorPayment(models.Model):
     
     def __str__(self):
         return f"{self.instructor} - {self.class_type} - {self.month.strftime('%Y-%m')} - {self.get_role_display()} - {self.instructor_share_amount}₮"
+    
+    def get_remaining_amount(self):
+        """Үлдсэн төлөх дүн"""
+        # Calculate from allocations
+        total_allocated = self.allocations.aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0.00')
+        return self.instructor_share_amount - total_allocated
+    
+    def update_paid_amount(self):
+        """Төлсөн дүнг шинэчлэх (allocations-аас)"""
+        total_allocated = self.allocations.aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0.00')
+        self.paid_amount = total_allocated
+        self.is_paid = (total_allocated >= self.instructor_share_amount)
+        self.save()
+    
+    def get_payment_status(self):
+        """Төлбөрийн төлөв"""
+        if self.paid_amount == 0:
+            return "Төлөгдөөгүй"
+        elif self.paid_amount >= self.instructor_share_amount:
+            return "Бүрэн төлөгдсөн"
+        else:
+            return "Хэсэгчлэн төлөгдсөн"
 
 
 class MonthlyFederationPayment(models.Model):
@@ -1051,3 +1169,52 @@ class MonthlyFederationPayment(models.Model):
     
     def __str__(self):
         return f"{self.class_type} - {self.month.strftime('%Y-%m')} - {self.federation_share_amount}₮"
+
+
+class PaymentCellComment(models.Model):
+    """Төлбөрийн хүснэгтийн нүдэнд бичих коммент"""
+    
+    COLOR_CHOICES = [
+        ('', 'Өнгөгүй'),
+        ('green', 'Ногоон'),
+        ('blue', 'Цэнхэр'),
+        ('yellow', 'Шар'),
+        ('red', 'Улаан'),
+        ('purple', 'Нил ягаан'),
+        ('pink', 'Ягаан'),
+        ('orange', 'Улбар шар'),
+        ('gray', 'Саарал'),
+    ]
+    
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name='cell_comments',
+        verbose_name="Сурагч"
+    )
+    month = models.DateField(
+        verbose_name="Сар",
+        help_text="Тухайн сарын эхний өдөр"
+    )
+    comment = models.TextField(
+        blank=True,
+        verbose_name="Коммент"
+    )
+    highlight_color = models.CharField(
+        max_length=10,
+        choices=COLOR_CHOICES,
+        blank=True,
+        default='',
+        verbose_name="Өнгө"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Үүсгэсэн огноо")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Шинэчилсэн огноо")
+    
+    class Meta:
+        verbose_name = "Нүдний коммент"
+        verbose_name_plural = "Нүдний комментүүд"
+        ordering = ['student', '-month']
+        unique_together = ['student', 'month']
+    
+    def __str__(self):
+        return f"{self.student} - {self.month.strftime('%Y-%m')}"

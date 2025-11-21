@@ -20,6 +20,7 @@
 
         <!-- Login Form -->
         <div class="bg-white rounded-2xl shadow-2xl p-8">
+            {% csrf_token%}
             {% if messages %}
             <div class="mb-6">
                 {% for message in messages %}

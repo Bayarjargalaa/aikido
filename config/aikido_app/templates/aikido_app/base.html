@@ -165,7 +165,14 @@
                 <li>
                     <a href="{% url 'instructor_payment_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'instructor_payment_list' %}bg-blue-700{% endif %}">
                         <i class="fas fa-hand-holding-usd w-5 h-5 text-blue-200 group-hover:text-white"></i>
-                        <span class="ml-3">Миний цалин</span>
+                        <span class="ml-3">Миний урамшуулал</span>
+                    </a>
+                </li>
+                
+                <li>
+                    <a href="{% url 'payment_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 group transition-all duration-200 {% if request.resolver_match.url_name == 'payment_list' %}bg-blue-700{% endif %}">
+                        <i class="fas fa-money-bill-wave w-5 h-5 text-blue-200 group-hover:text-white"></i>
+                        <span class="ml-3">Төлбөр</span>
                     </a>
                 </li>
                 <li>

@@ -39,6 +39,9 @@ urlpatterns = [
     path('bank-transactions/upload/', views.bank_transaction_upload, name='bank_transaction_upload'),
     path('bank-transactions/<int:transaction_id>/match/', views.bank_transaction_match, name='bank_transaction_match'),
     path('payment-allocation/<int:allocation_id>/delete/', views.delete_payment_allocation, name='delete_payment_allocation'),
+    path('seminar-payment-allocation/<int:allocation_id>/delete/', views.delete_seminar_payment_allocation, name='delete_seminar_payment_allocation'),
+    path('membership-payment-allocation/<int:allocation_id>/delete/', views.delete_membership_payment_allocation, name='delete_membership_payment_allocation'),
     path('expense-allocation/<int:allocation_id>/delete/', views.delete_expense_allocation, name='delete_expense_allocation'),
+    path('instructor-payment-allocation/<int:allocation_id>/delete/', views.delete_instructor_payment_allocation, name='delete_instructor_payment_allocation'),
     path('income-allocation/<int:allocation_id>/delete/', views.delete_income_allocation, name='delete_income_allocation'),
 ]
