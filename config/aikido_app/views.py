@@ -29,7 +29,8 @@ from .forms import BankTransactionUploadForm, PaymentAllocationForm, StudentForm
 def login_view(request):
     """Нэвтрэх хуудас"""
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        # Нэвтэрсэн хүмүүсийг нүүр хуудас руу шилжүүлэх
+        return redirect('landing')
     
     if request.method == 'POST':
         username = request.POST.get('username')  # Энэ нь имэйл байх болно
@@ -57,7 +58,8 @@ def logout_view(request):
 def register_view(request):
     """Бүртгүүлэх хуудас"""
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        # Нэвтэрсэн хүмүүсийг нүүр хуудас руу шилжүүлэх
+        return redirect('landing')
     
     if request.method == 'POST':
         username = request.POST.get('username')
