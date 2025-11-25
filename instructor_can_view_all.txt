@@ -1,0 +1,12 @@
+ID: 4, Name: Алтанбагана  
+  can_view_all_payments: False
+
+ID: 3, Name: Галбадрах Бор
+  can_view_all_payments: False
+
+ID: 1, Name: Амгаланбаяр Дугар
+  can_view_all_payments: False
+
+ID: 2, Name: Баясгалан Жаргал
+  can_view_all_payments: True
+

@@ -76,7 +76,7 @@
 
     <!-- Filters -->
     <div class="bg-white rounded-lg shadow-md p-4 mb-6">
-        <form method="get" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                     <i class="fas fa-calendar mr-1"></i>Сар
@@ -118,13 +118,23 @@
                     {% endfor %}
                 </select>
             </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-search mr-1"></i>Утга хайх
+                </label>
+                <input type="text" name="search" value="{{ search_query|default:'' }}" 
+                       placeholder="Харьцсан данс эсвэл утга..."
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+            </div>
+            
             <button type="submit" 
                     class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                 <i class="fas fa-filter mr-2"></i>Шүүх
             </button>
-            {% if selected_status %}
+            {% if selected_status or selected_month or selected_type or search_query %}
             <a href="{% url 'bank_transaction_list' %}" 
-               class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
+               class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-center">
                 <i class="fas fa-times mr-2"></i>Цэвэрлэх
             </a>
             {% endif %}
@@ -138,55 +148,12 @@
             <table class="min-w-full divide-y divide-gray-200" id="transactionsTable">
                 <thead class="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
                     <tr>
-                        <th class="py-4 px-6 text-left font-semibold">
-                            <div class="flex flex-col gap-2">
-                                <span>Огноо</span>
-                                <input type="text" id="filterDate" placeholder="Хайх..." 
-                                       class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
-                            </div>
-                        </th>
-                        <th class="py-4 px-6 text-center font-semibold">
-                            <div class="flex flex-col gap-2">
-                                <span>Төрөл</span>
-                                <select id="filterType" class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
-                                    <option value="">Бүгд</option>
-                                    <option value="орлого">Орлого</option>
-                                    <option value="зардал">Зардал</option>
-                                </select>
-                            </div>
-                        </th>
-                        <th class="py-4 px-6 text-right font-semibold">
-                            <div class="flex flex-col gap-2">
-                                <span>Дүн</span>
-                                <input type="text" id="filterAmount" placeholder="Хайх..." 
-                                       class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
-                            </div>
-                        </th>
-                        <th class="py-4 px-6 text-left font-semibold">
-                            <div class="flex flex-col gap-2">
-                                <span>Харьцсан данс</span>
-                                <input type="text" id="filterAccount" placeholder="Хайх..." 
-                                       class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
-                            </div>
-                        </th>
-                        <th class="py-4 px-6 text-left font-semibold">
-                            <div class="flex flex-col gap-2">
-                                <span>Утга</span>
-                                <input type="text" id="filterDescription" placeholder="Хайх..." 
-                                       class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
-                            </div>
-                        </th>
-                        <th class="py-4 px-6 text-center font-semibold">
-                            <div class="flex flex-col gap-2">
-                                <span>Төлөв</span>
-                                <select id="filterStatus" class="px-2 py-1 text-sm text-gray-800 border border-white rounded focus:ring-2 focus:ring-blue-300">
-                                    <option value="">Бүгд</option>
-                                    <option value="холбоогүй">Холбоогүй</option>
-                                    <option value="холбосон">Холбосон</option>
-                                    <option value="хэсэгчлэн">Хэсэгчлэн</option>
-                                </select>
-                            </div>
-                        </th>
+                        <th class="py-4 px-6 text-left font-semibold">Огноо</th>
+                        <th class="py-4 px-6 text-center font-semibold">Төрөл</th>
+                        <th class="py-4 px-6 text-right font-semibold">Дүн</th>
+                        <th class="py-4 px-6 text-left font-semibold">Харьцсан данс</th>
+                        <th class="py-4 px-6 text-left font-semibold">Утга</th>
+                        <th class="py-4 px-6 text-center font-semibold">Төлөв</th>
                         <th class="py-4 px-6 text-right font-semibold">Хуваарилсан</th>
                         <th class="py-4 px-6 text-right font-semibold">Үлдсэн</th>
                         <th class="py-4 px-6 text-center font-semibold">Үйлдэл</th>
@@ -387,83 +354,4 @@
     </div>
     {% endif %}
 </div>
-
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const table = document.getElementById('transactionsTable');
-    if (!table) return;
-    
-    const tbody = table.querySelector('tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => !row.classList.contains('allocation-row'));
-    
-    // Filter inputs
-    const filterDate = document.getElementById('filterDate');
-    const filterType = document.getElementById('filterType');
-    const filterAmount = document.getElementById('filterAmount');
-    const filterAccount = document.getElementById('filterAccount');
-    const filterDescription = document.getElementById('filterDescription');
-    const filterStatus = document.getElementById('filterStatus');
-    
-    function filterTable() {
-        const dateValue = filterDate.value.toLowerCase();
-        const typeValue = filterType.value.toLowerCase();
-        const amountValue = filterAmount.value.toLowerCase();
-        const accountValue = filterAccount.value.toLowerCase();
-        const descriptionValue = filterDescription.value.toLowerCase();
-        const statusValue = filterStatus.value.toLowerCase();
-        
-        rows.forEach(row => {
-            const cells = row.querySelectorAll('td');
-            if (cells.length < 6) return;
-            
-            // Get cell values
-            const date = cells[0].textContent.toLowerCase();
-            const type = cells[1].textContent.toLowerCase();
-            const amount = cells[2].textContent.toLowerCase();
-            const account = cells[3].textContent.toLowerCase();
-            const description = cells[4].textContent.toLowerCase();
-            const status = cells[5].textContent.toLowerCase();
-            
-            // Check if row matches all filters
-            const matchDate = !dateValue || date.includes(dateValue);
-            const matchType = !typeValue || type.includes(typeValue);
-            const matchAmount = !amountValue || amount.includes(amountValue);
-            const matchAccount = !accountValue || account.includes(accountValue);
-            const matchDescription = !descriptionValue || description.includes(descriptionValue);
-            const matchStatus = !statusValue || status.includes(statusValue);
-            
-            // Show/hide row
-            if (matchDate && matchType && matchAmount && matchAccount && matchDescription && matchStatus) {
-                row.style.display = '';
-                // Also show allocation row if exists
-                const nextRow = row.nextElementSibling;
-                if (nextRow && nextRow.classList.contains('allocation-row')) {
-                    nextRow.style.display = '';
-                }
-            } else {
-                row.style.display = 'none';
-                // Also hide allocation row if exists
-                const nextRow = row.nextElementSibling;
-                if (nextRow && nextRow.classList.contains('allocation-row')) {
-                    nextRow.style.display = 'none';
-                }
-            }
-        });
-        
-        // Update visible count
-        const visibleRows = rows.filter(row => row.style.display !== 'none');
-        console.log(`Showing ${visibleRows.length} of ${rows.length} transactions`);
-    }
-    
-    // Add event listeners
-    if (filterDate) filterDate.addEventListener('keyup', filterTable);
-    if (filterType) filterType.addEventListener('change', filterTable);
-    if (filterAmount) filterAmount.addEventListener('keyup', filterTable);
-    if (filterAccount) filterAccount.addEventListener('keyup', filterTable);
-    if (filterDescription) filterDescription.addEventListener('keyup', filterTable);
-    if (filterStatus) filterStatus.addEventListener('change', filterTable);
-});
-</script>
-{% endblock %}
 {% endblock %}

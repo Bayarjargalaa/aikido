@@ -3,9 +3,13 @@ from django.contrib.auth import authenticate, login as auth_login, logout as aut
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
-from django.db.models import Count, Sum, F
+from django.db.models import Count, Sum, F, Q
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView
+from django.urls import reverse_lazy
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from datetime import datetime, timedelta
 from decimal import Decimal
 import json
@@ -19,7 +23,7 @@ from .models import (
     MonthlyInstructorPayment, MonthlyFederationPayment, InstructorPaymentAllocation,
     PaymentCellComment
 )
-from .forms import BankTransactionUploadForm, PaymentAllocationForm
+from .forms import BankTransactionUploadForm, PaymentAllocationForm, StudentForm, InstructorForm, AttendanceRecordForm
 
 
 def login_view(request):
@@ -191,7 +195,7 @@ def student_list(request):
 
 @login_required
 def student_create(request):
-    """Сурагч бүртгэх"""
+    """Сурагч бүртгэх - Function-based view (Exception handling нэмсэн)"""
     if request.method == 'POST':
         first_name = request.POST.get('first_name')
         last_name = request.POST.get('last_name')
@@ -203,6 +207,7 @@ def student_create(request):
         current_rank_date = request.POST.get('current_rank_date') or None
         monthly_fee = request.POST.get('monthly_fee') or None
         fee_note = request.POST.get('fee_note', '')
+        is_fee_exempt = request.POST.get('is_fee_exempt') == '1'
         class_types = request.POST.getlist('class_types')
         is_active = request.POST.get('is_active') == 'on'
         
@@ -221,13 +226,25 @@ def student_create(request):
                     dan_rank=int(dan_rank) if dan_rank else None,
                     current_rank_date=current_rank_date,
                     monthly_fee=monthly_fee,
+                    is_fee_exempt=is_fee_exempt,
                     fee_note=fee_note,
                     is_active=is_active
                 )
                 if class_types:
                     student.class_types.set(class_types)
+                
+                # Validation check
+                try:
+                    student.full_clean()
+                except ValidationError as ve:
+                    student.delete()  # Rollback
+                    messages.error(request, f'Validation алдаа: {ve}')
+                    return render(request, 'aikido_app/student_form.html', {'class_types': ClassType.objects.all()})
+                
                 messages.success(request, f'{student} амжилттай бүртгэгдлээ!')
                 return redirect('student_list')
+            except ValueError as ve:
+                messages.error(request, f'Утга буруу байна: {str(ve)}')
             except Exception as e:
                 messages.error(request, f'Алдаа гарлаа: {str(e)}')
     
@@ -260,6 +277,7 @@ def student_edit(request, pk):
         student.current_rank_date = current_rank_date if current_rank_date else None
         student.monthly_fee = monthly_fee if monthly_fee else None
         student.fee_note = request.POST.get('fee_note', '')
+        student.is_fee_exempt = request.POST.get('is_fee_exempt') == '1'
         student.is_active = request.POST.get('is_active') == 'on'
         class_types = request.POST.getlist('class_types')
         
@@ -834,7 +852,17 @@ def payment_list(request):
         group_total = 0
         group_column_totals = []
         
+        # Statistics for this class group
+        total_students = len(class_groups[class_name])
+        students_with_attendance = set()
+        students_with_payment = set()
+        fee_exempt_students = set()
+        
         for student in class_groups[class_name]:
+            # Check if student is fee exempt
+            if student.is_fee_exempt:
+                fee_exempt_students.add(student.id)
+            
             row = {
                 'student': student,
                 'months': [],
@@ -846,6 +874,13 @@ def payment_list(request):
                 
                 if month in pivot_data[student.id]:
                     month_data = pivot_data[student.id][month].copy()
+                    
+                    # Track students with attendance/payment
+                    if month_data.get('actual_attendance', 0) > 0:
+                        students_with_attendance.add(student.id)
+                    if month_data.get('amount', 0) > 0:
+                        students_with_payment.add(student.id)
+                    
                     # Apply cell comment if exists (overrides allocation-based color/comment)
                     if cell_comment_data:
                         if cell_comment_data.get('highlight_color'):
@@ -879,19 +914,56 @@ def payment_list(request):
             rows.append(row)
             group_total += row['row_total']
         
-        # Calculate column totals for this group
+        # Calculate column totals and statistics for this group
+        group_month_stats = []
         for month in months:
-            month_total = sum(
-                pivot_data[student.id].get(month, {}).get('amount', 0)
-                for student in class_groups[class_name]
-            )
-            group_column_totals.append(month_total)
+            month_total = 0
+            month_students_with_attendance = 0
+            month_students_with_payment = 0
+            month_fee_exempt = 0
+            month_students_should_pay = 0
+            
+            for student in class_groups[class_name]:
+                month_data = pivot_data[student.id].get(month, {})
+                month_total += month_data.get('amount', 0)
+                
+                # Student has attendance this month
+                if month_data.get('actual_attendance', 0) > 0:
+                    month_students_with_attendance += 1
+                    
+                    # Student paid this month
+                    if month_data.get('amount', 0) > 0:
+                        month_students_with_payment += 1
+                    
+                    # Check if fee exempt
+                    if student.is_fee_exempt:
+                        month_fee_exempt += 1
+                    else:
+                        # Should pay but hasn't
+                        if month_data.get('amount', 0) == 0:
+                            month_students_should_pay += 1
+            
+            group_month_stats.append({
+                'total': month_total,
+                'with_attendance': month_students_with_attendance,
+                'with_payment': month_students_with_payment,
+                'fee_exempt': month_fee_exempt,
+                'should_pay': month_students_should_pay
+            })
         
         groups.append({
             'class_name': class_name,
             'rows': rows,
             'group_total': group_total,
-            'group_column_totals': group_column_totals
+            'group_column_totals': [stat['total'] for stat in group_month_stats],
+            'month_statistics': group_month_stats,
+            'months_with_stats': list(zip(months, group_month_stats)),
+            'statistics': {
+                'total_students': total_students,
+                'students_with_attendance': len(students_with_attendance),
+                'students_with_payment': len(students_with_payment),
+                'fee_exempt_students': len(fee_exempt_students),
+            }
         })
     
     # Calculate column totals for each month
@@ -992,13 +1064,28 @@ def attendance_record(request):
                 try:
                     date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
                     
-                    # Get or create class session
+                    # Validate weekday for class type
+                    weekday = date_obj.weekday()
                     class_type = ClassType.objects.filter(name=class_type_name).first() or ClassType.objects.first()
+                    
+                    # Skip if weekday doesn't match class type schedule
+                    if class_type.name in [ClassType.MORNING, ClassType.EVENING]:
+                        # MORNING/EVENING: Mon, Wed, Fri only (0, 2, 4)
+                        if weekday not in [0, 2, 4]:
+                            print(f"Skipping {class_type.name} session on {date_obj} - wrong weekday {weekday}")
+                            continue
+                    elif class_type.name == ClassType.CHILDREN:
+                        # CHILDREN: Sat, Sun only (5, 6)
+                        if weekday not in [5, 6]:
+                            print(f"Skipping {class_type.name} session on {date_obj} - wrong weekday {weekday}")
+                            continue
+                    
+                    # Get or create class session
                     session, created = ClassSession.objects.get_or_create(
                         date=date_obj,
                         class_type=class_type,
                         defaults={
-                            'weekday': date_obj.weekday(),
+                            'weekday': weekday,
                             'start_time': '09:00',
                             'end_time': '11:00',
                         }
@@ -1041,21 +1128,55 @@ def attendance_record(request):
                     student = Student.objects.get(id=student_id)
                     date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
                     
-                    # Get class type from request data
-                    class_type = ClassType.objects.filter(name=class_type_name).first()
-                    if not class_type:
-                        class_type = student.class_types.first() or ClassType.objects.first()
+                    # Validate weekday for class type
+                    weekday = date_obj.weekday()
+                    if class_type_name:
+                        if class_type_name in ['MORNING', 'EVENING']:
+                            # MORNING/EVENING: Mon, Wed, Fri only (0, 2, 4)
+                            if weekday not in [0, 2, 4]:
+                                print(f"Skipping attendance for {student} on {date_obj} - {class_type_name} not scheduled on weekday {weekday}")
+                                continue
+                        elif class_type_name == 'CHILDREN':
+                            # CHILDREN: Sat, Sun only (5, 6)
+                            if weekday not in [5, 6]:
+                                print(f"Skipping attendance for {student} on {date_obj} - {class_type_name} not scheduled on weekday {weekday}")
+                                continue
                     
-                    # Find or create session for this date and class type
-                    session, created = ClassSession.objects.get_or_create(
-                        date=date_obj,
-                        class_type=class_type,
-                        defaults={
-                            'weekday': date_obj.weekday(),
-                            'start_time': '09:00',
-                            'end_time': '11:00',
-                        }
-                    )
+                    # Find the session that was created by instructor assignment
+                    # First try to find existing session for this date
+                    session = None
+                    existing_sessions = ClassSession.objects.filter(date=date_obj)
+                    
+                    # CRITICAL: Filter by class_type_name first if provided
+                    if class_type_name:
+                        existing_sessions = existing_sessions.filter(class_type__name=class_type_name)
+                    
+                    if existing_sessions.count() == 1:
+                        # Only one session (matching class type) - use it
+                        session = existing_sessions.first()
+                    elif existing_sessions.count() > 1:
+                        # Multiple sessions - prefer the one with instructor assignment
+                        for sess in existing_sessions:
+                            if sess.instructor_assignments.exists():
+                                session = sess
+                                break
+                        # Otherwise use first one
+                        if not session:
+                            session = existing_sessions.first()
+                    
+                    # If still no session found, create one based on class_type_name or student's class
+                    if not session:
+                        class_type = ClassType.objects.filter(name=class_type_name).first()
+                        if not class_type:
+                            class_type = student.class_types.first() or ClassType.objects.first()
+                        
+                        session = ClassSession.objects.create(
+                            date=date_obj,
+                            class_type=class_type,
+                            weekday=date_obj.weekday(),
+                            start_time='09:00',
+                            end_time='11:00',
+                        )
                     
                     # Get is_present from request data (defaults to True if not specified)
                     is_present = item.get('is_present', True)
@@ -1086,6 +1207,14 @@ def attendance_record(request):
     # GET request - display attendance form
     selected_class_type = request.GET.get('class_type', '')
     selected_month = request.GET.get('month', datetime.now().strftime('%Y-%m'))
+    
+    # Auto-select class type for logged-in instructor if not specified
+    if not selected_class_type and instructor:
+        # Get instructor's allowed class types
+        allowed_types = instructor.allowed_class_types.all()
+        if allowed_types.exists():
+            # Use first allowed class type as default
+            selected_class_type = allowed_types.first().name
     
     # Parse selected month
     year, month = map(int, selected_month.split('-'))
@@ -1160,34 +1289,50 @@ def attendance_record(request):
             student.attendance_count = len(student.attendance_dates)
     
     # Get all active instructors for assignment
+    # Don't filter by allowed_class_types - let admin assign any instructor to any class
     all_instructors = Instructor.objects.filter(is_active=True).order_by('last_name', 'first_name')
     
     # Determine default instructors based on class type
-    # Using actual instructor names from database:
-    # ID 3: Галбадрах (Хүүхэд)
-    # ID 1: Амгаланбаяр (Өглөө)
-    # ID 2: Баясгалан (Орой)
+    # Priority 1: Use logged-in instructor if available
+    # Priority 2: Use class-specific default instructors by name matching
     default_lead = None
     default_assistant = None
     
+    # Get default instructors by email or name
+    default_instructors = {}
     try:
-        if selected_class_type == ClassType.CHILDREN:
-            # Хүүхдийн анги - Галбадрах
-            default_instructor = Instructor.objects.get(id=3)  # Галбадрах
+        # Try to find instructors by common patterns in their data
+        for inst in all_instructors:
+            name_lower = (inst.first_name + inst.last_name).lower()
+            if 'амгалан' in name_lower:
+                default_instructors[ClassType.MORNING] = inst
+            elif 'баясгалан' in name_lower or 'баясгал' in name_lower:
+                default_instructors[ClassType.EVENING] = inst
+            elif 'галбадрах' in name_lower or 'галба' in name_lower:
+                default_instructors[ClassType.CHILDREN] = inst
+    except Exception as e:
+        print(f"Error setting default instructors: {e}")
+    
+    # Set defaults based on logged-in instructor first
+    if instructor and selected_class_type:
+        # Check if logged-in instructor is allowed to teach this class type
+        try:
+            class_type_obj = ClassType.objects.get(name=selected_class_type)
+            instructor_allowed_types = instructor.allowed_class_types.all()
+            
+            # If instructor has no restrictions OR has this specific class type
+            if not instructor_allowed_types.exists() or class_type_obj in instructor_allowed_types:
+                default_lead = instructor
+                default_assistant = instructor
+        except ClassType.DoesNotExist:
+            pass
+    
+    # If no logged-in instructor match, use class-specific defaults
+    if not default_lead and selected_class_type:
+        default_instructor = default_instructors.get(selected_class_type)
+        if default_instructor:
             default_lead = default_instructor
             default_assistant = default_instructor
-        elif selected_class_type == ClassType.MORNING:
-            # Өглөөний анги - Амгаланбаяр
-            default_instructor = Instructor.objects.get(id=1)  # Амгаланбаяр
-            default_lead = default_instructor
-            default_assistant = default_instructor
-        elif selected_class_type == ClassType.EVENING:
-            # Оройны анги - Баясгалан
-            default_instructor = Instructor.objects.get(id=2)  # Баясгалан
-            default_lead = default_instructor
-            default_assistant = default_instructor
-    except Instructor.DoesNotExist:
-        pass
     
     # Get existing instructor assignments for the dates
     if dates:
@@ -1491,6 +1636,16 @@ def bank_transaction_list(request):
     elif type_filter == 'expense':
         transactions = transactions.exclude(debit_amount=0).exclude(debit_amount__isnull=True)
     
+    # Search filter - search in counterparty_account, description, and payer_name
+    search_query = request.GET.get('search', '').strip()
+    if search_query:
+        from django.db.models import Q
+        transactions = transactions.filter(
+            Q(counterparty_account__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(payer_name__icontains=search_query)
+        )
+    
     # Order by date descending
     transactions = transactions.order_by('-transaction_date', '-imported_at')
     
@@ -1519,6 +1674,7 @@ def bank_transaction_list(request):
         'selected_status': status_filter,
         'selected_month': month_filter,
         'selected_type': type_filter,
+        'search_query': search_query,
         'months': months,
         'summary': summary,
     }
@@ -1662,9 +1818,11 @@ def bank_transaction_upload(request):
                             # Try multiple date formats (including datetime formats)
                             transaction_date = None
                             date_formats = [
-                                '%Y/%m/%d %H:%M',    # 2025/07/30 12:15
-                                '%Y/%m/%d  %H:%M',   # 2025/07/30  12:15 (double space)
-                                '%Y-%m-%d %H:%M',
+                                '%Y-%m-%d %H:%M:%S',  # 2025-11-13 15:57:11
+                                '%Y/%m/%d %H:%M:%S',  # 2025/11/13 15:57:11
+                                '%Y/%m/%d %H:%M',     # 2025/07/30 12:15
+                                '%Y/%m/%d  %H:%M',    # 2025/07/30  12:15 (double space)
+                                '%Y-%m-%d %H:%M',     # 2025-11-13 15:57
                                 '%Y/%m/%d',
                                 '%Y-%m-%d',
                                 '%d.%m.%Y',
@@ -2371,13 +2529,9 @@ def instructor_payment_list(request):
             if allowed_class_types.exists():
                 payments = payments.filter(class_type__in=allowed_class_types)
         else:
-            # Only their own payments
+            # Only their own payments - show ALL their payments regardless of allowed_class_types
+            # allowed_class_types is for attendance recording permission, not for viewing own payments
             payments = payments.filter(instructor=instructor_profile)
-            
-            # Further filter by allowed class types if set
-            allowed_class_types = instructor_profile.allowed_class_types.all()
-            if allowed_class_types.exists():
-                payments = payments.filter(class_type__in=allowed_class_types)
             
             # Don't allow them to filter by other instructors
             instructor_id = None
@@ -2618,14 +2772,33 @@ def calculate_instructor_payments_from_attendance(request):
             year, month = map(int, month_str.split('-'))
             month_date = datetime(year, month, 1).date()
             
-            # Call management command logic
+            # Check if payments already exist and are paid or linked to bank transactions
+            from config.aikido_app.models import MonthlyInstructorPayment, MonthlyFederationPayment
+            
+            existing_payments = MonthlyInstructorPayment.objects.filter(month=month_date)
+            existing_federation = MonthlyFederationPayment.objects.filter(month=month_date)
+            
+            has_paid_payments = existing_payments.filter(is_paid=True).exists()
+            has_linked_payments = existing_payments.filter(bank_transaction__isnull=False).exists()
+            has_paid_federation = existing_federation.filter(is_paid=True).exists()
+            has_linked_federation = existing_federation.filter(bank_transaction__isnull=False).exists()
+            
+            if has_paid_payments or has_linked_payments or has_paid_federation or has_linked_federation:
+                messages.error(
+                    request, 
+                    f'{month_str} сарын төлбөр аль хэдийн төлөгдсөн эсвэл банкны гүйлгээтэй холбогдсон байна. '
+                    f'Дахин тооцоолох боломжгүй!'
+                )
+                return redirect(f'/attendance/record/?month={month_str}')
+            
+            # Call management command logic without recalculate flag
             from django.core.management import call_command
             from io import StringIO
             
             out = StringIO()
             call_command('calculate_monthly_payments', 
                         month=month_str,
-                        recalculate=True,
+                        recalculate=False,  # Don't force recalculation
                         stdout=out)
             
             output = out.getvalue()
@@ -2640,6 +2813,136 @@ def calculate_instructor_payments_from_attendance(request):
             return redirect('attendance_record')
     
     return redirect('attendance_record')
+
+
+# ============================================================================
+# CLASS-BASED VIEWS (Даалгаврын шаардлага)
+# ============================================================================
+
+class StudentListView(LoginRequiredMixin, ListView):
+    """Сурагчдын жагсаалт - Class-Based View"""
+    model = Student
+    template_name = 'aikido_app/student_list.html'
+    context_object_name = 'students'
+    paginate_by = 50
+    
+    def get_queryset(self):
+        queryset = Student.objects.all().order_by('last_name', 'first_name')
+        search = self.request.GET.get('search', '')
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search) | 
+                Q(last_name__icontains=search) |
+                Q(phone__icontains=search) |
+                Q(email__icontains=search)
+            )
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['total_students'] = Student.objects.count()
+        context['active_students'] = Student.objects.filter(is_active=True).count()
+        context['class_types'] = ClassType.objects.all()
+        return context
+
+
+class StudentCreateView(LoginRequiredMixin, CreateView):
+    """Сурагч нэмэх - Class-Based View"""
+    model = Student
+    form_class = StudentForm
+    template_name = 'aikido_app/student_form.html'
+    success_url = reverse_lazy('student_list')
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Сурагч амжилттай нэмэгдлээ!')
+        return super().form_valid(form)
+    
+    def form_invalid(self, form):
+        messages.error(self.request, 'Алдаа гарлаа. Мэдээллээ шалгана уу.')
+        return super().form_invalid(form)
+
+
+class StudentUpdateView(LoginRequiredMixin, UpdateView):
+    """Сурагчийн мэдээлэл засах - Class-Based View"""
+    model = Student
+    form_class = StudentForm
+    template_name = 'aikido_app/student_form.html'
+    success_url = reverse_lazy('student_list')
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Сурагчийн мэдээлэл амжилттай шинэчлэгдлээ!')
+        return super().form_valid(form)
+    
+    def form_invalid(self, form):
+        messages.error(self.request, 'Алдаа гарлаа. Мэдээллээ шалгана уу.')
+        return super().form_invalid(form)
+
+
+class StudentDeleteView(LoginRequiredMixin, DeleteView):
+    """Сурагч устгах - Class-Based View"""
+    model = Student
+    template_name = 'aikido_app/student_confirm_delete.html'
+    success_url = reverse_lazy('student_list')
+    
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Сурагч амжилттай устгагдлаа!')
+        return super().delete(request, *args, **kwargs)
+
+
+class InstructorListView(LoginRequiredMixin, ListView):
+    """Багш нарын жагсаалт - Class-Based View"""
+    model = Instructor
+    template_name = 'aikido_app/instructor_list.html'
+    context_object_name = 'instructors'
+    paginate_by = 50
+    
+    def get_queryset(self):
+        queryset = Instructor.objects.all().order_by('last_name', 'first_name')
+        search = self.request.GET.get('search', '')
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search) | 
+                Q(last_name__icontains=search) |
+                Q(phone__icontains=search)
+            )
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['total_instructors'] = Instructor.objects.count()
+        context['active_instructors'] = Instructor.objects.filter(is_active=True).count()
+        context['class_types'] = ClassType.objects.all()
+        return context
+
+
+# ============================================================================
+# PUBLIC PAGES (Даалгаврын шаардлага - нийтийн хэсэг)
+# ============================================================================
+
+class LandingPageView(TemplateView):
+    """Нүүр хуудас - Public"""
+    template_name = 'aikido_app/index.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['total_students'] = Student.objects.filter(is_active=True).count()
+        context['total_instructors'] = Instructor.objects.filter(is_active=True).count()
+        context['class_types'] = ClassType.objects.all()
+        return context
+
+
+class AboutPageView(TemplateView):
+    """Бидний тухай - Public"""
+    template_name = 'aikido_app/about.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['class_types'] = ClassType.objects.all()
+        return context
+
+
+        
+    
 
 
         

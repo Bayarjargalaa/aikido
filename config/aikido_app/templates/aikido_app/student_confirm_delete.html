@@ -1,0 +1,60 @@
+{% extends 'aikido_app/base.html' %}
+
+{% block title %}Сурагч устгах{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white rounded-lg shadow-lg p-8">
+        <div class="text-center mb-6">
+            <i class="fas fa-exclamation-triangle text-6xl text-red-500 mb-4"></i>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Сурагч устгах</h1>
+            <p class="text-gray-600">Та үүнийг буцаах боломжгүй болохыг анхаарна уу!</p>
+        </div>
+
+        <div class="bg-red-50 border-l-4 border-red-500 p-6 mb-6 rounded">
+            <div class="flex items-center mb-4">
+                <i class="fas fa-user-circle text-3xl text-red-600 mr-4"></i>
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800">{{ object.last_name }} {{ object.first_name }}</h2>
+                    <p class="text-gray-600">
+                        <i class="fas fa-phone mr-2"></i>{{ object.phone }}
+                    </p>
+                    {% if object.email %}
+                    <p class="text-gray-600">
+                        <i class="fas fa-envelope mr-2"></i>{{ object.email }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="text-sm text-gray-700">
+                <p><i class="fas fa-award mr-2"></i><strong>Зэрэг:</strong> {{ object.get_rank_display_full }}</p>
+                <p><i class="fas fa-calendar mr-2"></i><strong>Элссэн огноо:</strong> {{ object.enrollment_date|date:"Y-m-d" }}</p>
+            </div>
+        </div>
+
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+            
+            <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded">
+                <p class="text-yellow-800 font-semibold mb-2">
+                    <i class="fas fa-info-circle mr-2"></i>Анхааруулга
+                </p>
+                <p class="text-yellow-700 text-sm">
+                    Энэ сурагчтай холбоотой бүх мэдээлэл (ирц, төлбөр гэх мэт) устгагдахгүй боловч 
+                    сурагчийн үндсэн мэдээлэл устах болно.
+                </p>
+            </div>
+
+            <div class="flex space-x-4">
+                <button type="submit" class="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition">
+                    <i class="fas fa-trash mr-2"></i>Тийм, устгах
+                </button>
+                <a href="{% url 'student_list' %}" class="flex-1 bg-gray-300 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-400 transition text-center">
+                    <i class="fas fa-times mr-2"></i>Үгүй, буцах
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

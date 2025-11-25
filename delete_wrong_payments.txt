@@ -1,0 +1,11 @@
+Found 4 wrong MORNING payments for Galbadrakh:
+
+  ID 101: 2025-09, Ахлах багш, 8 classes, 97142.86 tugrik [OK TO DELETE]
+  ID 103: 2025-09, Туслах багш, 8 classes, 64761.90 tugrik [OK TO DELETE]
+  ID 155: 2025-06, Ахлах багш, 8 classes, 32000.00 tugrik [OK TO DELETE]
+  ID 159: 2025-06, Туслах багш, 9 classes, 24000.00 tugrik [OK TO DELETE]
+
+
+Deletable payments: 4
+
+Deleted 4 wrong payments!

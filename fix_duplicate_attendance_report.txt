@@ -1,0 +1,9 @@
+Duplicate Attendance Check
+================================================================================
+
+
+Student: Баясгалан Жаргал (ID: 50)
+  Registered class types: ['Орой']
+  Total attendance: 30
+    - MORNING: 0
+    - EVENING: 30

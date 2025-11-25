@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
 from decimal import Decimal
 
 
@@ -70,6 +71,11 @@ class Student(models.Model):
         validators=[MinValueValidator(Decimal('0.01'))],
         verbose_name="Сарын төлбөр"
     )
+    is_fee_exempt = models.BooleanField(
+        default=False,
+        verbose_name="Төлбөрөөс чөлөөлөгдсөн эсэх",
+        help_text="Хэрвээ тэмдэглэсэн бол сарын төлбөр төлөх шаардлагагүй"
+    )
     fee_note = models.TextField(
         blank=True,
         verbose_name="Төлбөрийн тайлбар"
@@ -95,6 +101,29 @@ class Student(models.Model):
         elif self.kyu_rank:
             return f"{self.get_kyu_rank_display()}"
         return "Зэрэггүй"
+    
+    def clean(self):
+        """ДААЛГАВРЫН ШААРДЛАГА: Model validation"""
+        super().clean()
+        
+        # Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй
+        if self.kyu_rank and self.dan_rank:
+            raise ValidationError({
+                'kyu_rank': 'Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй.',
+                'dan_rank': 'Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй.'
+            })
+        
+        # Зэрэг байгаа бол огноо заавал байх ёстой
+        if (self.kyu_rank or self.dan_rank) and not self.current_rank_date:
+            raise ValidationError({
+                'current_rank_date': 'Зэрэг авсан огноог оруулна уу.'
+            })
+        
+        # Төлбөр сөрөг байж болохгүй
+        if self.monthly_fee and self.monthly_fee < 0:
+            raise ValidationError({
+                'monthly_fee': 'Сарын төлбөр сөрөг утга байж болохгүй.'
+            })
     
     def save(self, *args, **kwargs):
         """Override save to track rank history"""
@@ -212,6 +241,29 @@ class Instructor(models.Model):
             return f"{self.get_kyu_rank_display()}"
         return "Зэрэггүй"
     
+    def clean(self):
+        """ДААЛГАВРЫН ШААРДЛАГА: Model validation"""
+        super().clean()
+        
+        # Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй
+        if self.kyu_rank and self.dan_rank:
+            raise ValidationError({
+                'kyu_rank': 'Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй.',
+                'dan_rank': 'Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй.'
+            })
+        
+        # Багш заавал зэрэгтэй байх ёстой
+        if not self.kyu_rank and not self.dan_rank:
+            raise ValidationError(
+                'Багш заавал зэрэг цолтой байх ёстой.'
+            )
+        
+        # Зэрэг байгаа бол огноо заавал байх ёстой
+        if (self.kyu_rank or self.dan_rank) and not self.current_rank_date:
+            raise ValidationError({
+                'current_rank_date': 'Зэрэг авсан огноог оруулна уу.'
+            })
+    
     def save(self, *args, **kwargs):
         """Override save to track rank history"""
         # Check if this is an existing record (has pk)
@@ -272,15 +324,19 @@ class ClassType(models.Model):
 
 class ClassSession(models.Model):
     """Хичээлийн хуваарь - Тодорхой өдрийн хичээл"""
-    MONDAY = 1
-    WEDNESDAY = 3
-    FRIDAY = 5
-    SATURDAY = 6
-    SUNDAY = 0
+    MONDAY = 0
+    TUESDAY = 1
+    WEDNESDAY = 2
+    THURSDAY = 3
+    FRIDAY = 4
+    SATURDAY = 5
+    SUNDAY = 6
     
     WEEKDAY_CHOICES = [
         (MONDAY, 'Даваа'),
+        (TUESDAY, 'Мягмар'),
         (WEDNESDAY, 'Лхагва'),
+        (THURSDAY, 'Пүрэв'),
         (FRIDAY, 'Баасан'),
         (SATURDAY, 'Бямба'),
         (SUNDAY, 'Ням'),

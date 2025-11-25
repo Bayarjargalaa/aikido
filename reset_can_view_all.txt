@@ -1,0 +1,6 @@
+Алтанбагана  : False → False
+Галбадрах Бор: False → False
+Амгаланбаяр Дугар: False → False
+Баясгалан Жаргал: True → False
+
+All instructors now have can_view_all_payments=False

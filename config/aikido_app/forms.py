@@ -1,5 +1,7 @@
 from django import forms
-from .models import BankTransaction, PaymentAllocation, Student
+from django.core.exceptions import ValidationError
+from .models import BankTransaction, PaymentAllocation, Student, Instructor, ClassType, ClassSession
+from datetime import date
 
 
 class BankTransactionUploadForm(forms.Form):
@@ -152,3 +154,196 @@ class PaymentAllocationForm(forms.ModelForm):
         # Only show active students
         self.fields['student'].queryset = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
         self.fields['notes'].required = False
+
+
+# ============================================================================
+# ДААЛГАВРЫН ШААРДЛАГА - 3 Form нэмэх
+# ============================================================================
+
+class StudentForm(forms.ModelForm):
+    """Сурагч үүсгэх/засах форм"""
+    
+    class Meta:
+        model = Student
+        fields = [
+            'first_name', 'last_name', 'phone', 'email', 'date_of_birth',
+            'kyu_rank', 'dan_rank', 'current_rank_date',
+            'monthly_fee', 'is_fee_exempt', 'fee_note',
+            'class_types', 'is_active'
+        ]
+        widgets = {
+            'first_name': forms.TextInput(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 w-full',
+                'placeholder': 'Нэр'
+            }),
+            'last_name': forms.TextInput(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 w-full',
+                'placeholder': 'Овог'
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 w-full',
+                'placeholder': '99119911'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 w-full',
+                'placeholder': 'example@email.com'
+            }),
+            'date_of_birth': forms.DateInput(attrs={
+                'type': 'date',
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+            }),
+            'kyu_rank': forms.Select(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+            }),
+            'dan_rank': forms.Select(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+            }),
+            'current_rank_date': forms.DateInput(attrs={
+                'type': 'date',
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+            }),
+            'monthly_fee': forms.NumberInput(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500',
+                'step': '0.01',
+                'placeholder': '0.00'
+            }),
+            'is_fee_exempt': forms.CheckboxInput(attrs={
+                'class': 'w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500'
+            }),
+            'fee_note': forms.Textarea(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 w-full',
+                'rows': 3,
+                'placeholder': 'Төлбөрийн тайлбар'
+            }),
+            'class_types': forms.CheckboxSelectMultiple(),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500'
+            }),
+        }
+    
+    def clean(self):
+        """Зэрэг цолын validation"""
+        cleaned_data = super().clean()
+        kyu_rank = cleaned_data.get('kyu_rank')
+        dan_rank = cleaned_data.get('dan_rank')
+        
+        # Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй
+        if kyu_rank and dan_rank:
+            raise ValidationError(
+                'Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй. Нэгийг нь сонгоно уу.'
+            )
+        
+        return cleaned_data
+
+
+class InstructorForm(forms.ModelForm):
+    """Багш үүсгэх/засах форм"""
+    
+    class Meta:
+        model = Instructor
+        fields = [
+            'first_name', 'last_name', 'phone', 'email',
+            'kyu_rank', 'dan_rank', 'current_rank_date',
+            'allowed_class_types', 'is_active'
+        ]
+        widgets = {
+            'first_name': forms.TextInput(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 w-full',
+                'placeholder': 'Нэр'
+            }),
+            'last_name': forms.TextInput(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 w-full',
+                'placeholder': 'Овог'
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 w-full',
+                'placeholder': '99119911'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 w-full',
+                'placeholder': 'example@email.com'
+            }),
+            'kyu_rank': forms.Select(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+            }),
+            'dan_rank': forms.Select(attrs={
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+            }),
+            'current_rank_date': forms.DateInput(attrs={
+                'type': 'date',
+                'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+            }),
+            'allowed_class_types': forms.CheckboxSelectMultiple(),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500'
+            }),
+        }
+    
+    def clean(self):
+        """Зэрэг цолын validation"""
+        cleaned_data = super().clean()
+        kyu_rank = cleaned_data.get('kyu_rank')
+        dan_rank = cleaned_data.get('dan_rank')
+        
+        # Багш нь дан зэрэгтэй байх ёстой
+        if not dan_rank and not kyu_rank:
+            raise ValidationError('Багш заавал зэрэг цолтой байх ёстой.')
+        
+        # Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй
+        if kyu_rank and dan_rank:
+            raise ValidationError(
+                'Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй. Нэгийг нь сонгоно уу.'
+            )
+        
+        return cleaned_data
+
+
+class AttendanceRecordForm(forms.Form):
+    """Ирц бүртгэх форм"""
+    
+    session_date = forms.DateField(
+        label='Хичээлийн огноо',
+        initial=date.today,
+        widget=forms.DateInput(attrs={
+            'type': 'date',
+            'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+        })
+    )
+    
+    class_type = forms.ModelChoiceField(
+        queryset=ClassType.objects.all(),
+        label='Ангийн төрөл',
+        widget=forms.Select(attrs={
+            'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+        })
+    )
+    
+    start_time = forms.TimeField(
+        label='Эхлэх цаг',
+        required=False,
+        widget=forms.TimeInput(attrs={
+            'type': 'time',
+            'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+        })
+    )
+    
+    end_time = forms.TimeField(
+        label='Дуусах цаг',
+        required=False,
+        widget=forms.TimeInput(attrs={
+            'type': 'time',
+            'class': 'px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500'
+        })
+    )
+    
+    def clean(self):
+        """Цагийн validation"""
+        cleaned_data = super().clean()
+        start_time = cleaned_data.get('start_time')
+        end_time = cleaned_data.get('end_time')
+        
+        if start_time and end_time:
+            if start_time >= end_time:
+                raise ValidationError('Эхлэх цаг дуусах цагаас өмнө байх ёстой.')
+        
+        return cleaned_data

@@ -1,0 +1,25 @@
+ID: 4
+Name: Алтанбагана  
+Email: 
+Allowed class types count: 0
+
+ID: 3
+Name: Галбадрах Бор
+Email: b.galbadrakh09@gmail.com
+Allowed class types count: 1
+  - CHILDREN: Хүүхэд
+
+ID: 1
+Name: Амгаланбаяр Дугар
+Email: amgaa19aiki@gmail.com
+Allowed class types count: 1
+  - MORNING: Өглөө
+
+ID: 2
+Name: Баясгалан Жаргал
+Email: bayasaa68@gmail.com
+Allowed class types count: 3
+  - MORNING: Өглөө
+  - EVENING: Орой
+  - CHILDREN: Хүүхэд
+

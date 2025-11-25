@@ -77,20 +77,23 @@
     {% for group in groups %}
     <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
         <!-- Class Type Header -->
-        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 flex justify-between items-center">
-            <div>
-                <h2 class="text-2xl font-bold text-white">
-                    <i class="fas fa-users mr-2"></i>{{ group.class_name }}
-                    <span class="text-sm font-normal ml-2">({{ group.rows|length }} сурагч)</span>
-                </h2>
+        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-white">
+                        <i class="fas fa-users mr-2"></i>{{ group.class_name }}
+                        <span class="text-sm font-normal ml-2">({{ group.rows|length }} сурагч)</span>
+                    </h2>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-lg px-6 py-3">
+                    <p class="text-sm text-indigo-100 mb-1">Ангийн нийт төлбөр</p>
+                    <p class="text-3xl font-bold text-white">
+                        {{ group.group_total|floatformat:0 }}₮
+                    </p>
+                </div>
             </div>
-            <div class="bg-white bg-opacity-20 rounded-lg px-6 py-3">
-                <p class="text-sm text-indigo-100 mb-1">Ангийн нийт төлбөр</p>
-                <p class="text-3xl font-bold text-white">
-                    {{ group.group_total|floatformat:0 }}₮
-                </p>
-            </div>
-        </div>
+            
+            
         
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
@@ -99,11 +102,32 @@
                         <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider border-r border-blue-500 sticky left-0 bg-blue-600 z-20">
                             <i class="fas fa-user mr-1"></i>Сурагч
                         </th>
-                        {% for month in months %}
-                        <th class="px-2 py-3 text-center text-xs font-bold uppercase tracking-wider border-r border-blue-500">
-                            <div class="flex flex-col">
-                                <span class="text-lg">{{ month|date:"m" }}</span>
-                                <span class="text-[10px]">{{ month|date:"M" }}</span>
+                        {% for month, stats in group.months_with_stats %}
+                        <th class="px-3 py-2 text-center border-r border-blue-500 min-w-[120px]">
+                            <div class="flex flex-col items-center gap-1">
+                                <!-- Month Name -->
+                                <div class="flex flex-col items-center">
+                                    <span class="text-2xl font-bold">{{ month|date:"m" }}</span>
+                                    <span class="text-xs font-semibold uppercase">{{ month|date:"M" }}</span>
+                                </div>
+                                
+                                <!-- Month Statistics -->
+                                <div class="mt-2 pt-2 border-t border-blue-400 w-full">
+                                    <div class="grid grid-cols-2 gap-1 text-[10px]">
+                                        <div class="bg-white bg-opacity-20 rounded px-1 py-0.5" title="Ирцтэй">
+                                            <i class="fas fa-check text-green-300 mr-0.5"></i>{{ stats.with_attendance }}
+                                        </div>
+                                        <div class="bg-white bg-opacity-20 rounded px-1 py-0.5" title="Төлсөн">
+                                            <i class="fas fa-money-bill text-green-300 mr-0.5"></i>{{ stats.with_payment }}
+                                        </div>
+                                        <div class="bg-white bg-opacity-20 rounded px-1 py-0.5" title="Чөлөөлөгдсөн">
+                                            <i class="fas fa-gift text-yellow-300 mr-0.5"></i>{{ stats.fee_exempt }}
+                                        </div>
+                                        <div class="bg-white bg-opacity-20 rounded px-1 py-0.5" title="Төлөх ёстой">
+                                            <i class="fas fa-exclamation text-orange-300 mr-0.5"></i>{{ stats.should_pay }}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </th>
                         {% endfor %}
@@ -120,9 +144,14 @@
                                 <div class="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-bold mr-2 text-xs flex-shrink-0">
                                     {{ row.student.first_name|first }}{{ row.student.last_name|first }}
                                 </div>
-                                <div class="overflow-hidden">
-                                    <div class="text-sm font-medium text-gray-900 truncate">
-                                        {{ row.student.last_name }} {{ row.student.first_name }}
+                                <div class="overflow-hidden flex-1">
+                                    <div class="text-sm font-medium text-gray-900 truncate flex items-center gap-2">
+                                       <span>{{ row.student.first_name }} {{ row.student.last_name }}</span>
+                                       {% if row.student.is_fee_exempt %}
+                                       <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800" title="Төлбөрөөс чөлөөлөгдсөн">
+                                           <i class="fas fa-gift mr-1"></i>Чөлөө
+                                       </span>
+                                       {% endif %}
                                     </div>
                                     <div class="text-xs text-gray-500 truncate">
                                         {{ row.student.phone|default:"—" }}
@@ -144,6 +173,16 @@
                                 {% if month_data.amount > 0 %}
                                 <span class="inline-block px-2 py-1 {% if month_data.highlight_color %}bg-{{ month_data.highlight_color }}-200 text-{{ month_data.highlight_color }}-900{% else %}bg-green-100 text-green-800{% endif %} rounded font-semibold text-xs mb-1">
                                     {{ month_data.amount|floatformat:0 }}₮
+                                </span>
+                                {% elif row.student.is_fee_exempt and month_data.actual_attendance > 0 %}
+                                <!-- Чөлөөлөгдсөн бөгөөд ирцтэй бол -->
+                                <span class="inline-block px-2 py-1 bg-yellow-100 text-yellow-800 rounded font-semibold text-xs mb-1" title="Төлбөрөөс чөлөөлөгдсөн">
+                                    <i class="fas fa-gift mr-1"></i>Чөлөөлөгдсөн
+                                </span>
+                                {% elif month_data.actual_attendance > 0 %}
+                                <!-- Ирцтэй боловч төлбөр төлөөгүй (чөлөөлөгдөөгүй) -->
+                                <span class="inline-block px-2 py-1 bg-red-100 text-red-800 rounded font-semibold text-xs mb-1" title="Төлбөр төлөх шаардлагатай">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>Төлөх
                                 </span>
                                 {% endif %}
                                 
@@ -193,7 +232,7 @@
                             {% endif %}
                         </td>
                         {% endfor %}
-                        <td class="px-3 py-2 text-center bg-yellow-50 sticky right-0 z-10">
+                        <td class="px-3 py-2 text-center bg-yellow-50">
                             <span class="inline-block px-3 py-1 bg-yellow-200 text-yellow-900 rounded font-bold text-sm">
                                 {{ row.row_total|floatformat:0 }}₮
                             </span>
@@ -212,7 +251,7 @@
                             </span>
                         </td>
                         {% endfor %}
-                        <td class="px-3 py-2 text-center bg-indigo-100 sticky right-0 z-10">
+                        <td class="px-3 py-2 text-center bg-indigo-100">
                             <span class="inline-block px-3 py-1 bg-indigo-300 text-indigo-900 rounded font-bold text-sm">
                                 {{ group.group_total|floatformat:0 }}₮
                             </span>
@@ -426,16 +465,6 @@ function changeYear(year) {
     tbody td:last-child, thead th:last-child {
         min-width: 110px;
         max-width: 110px;
-        position: sticky;
-        right: 0;
-        background-color: white;
-        z-index: 5;
-        box-shadow: -2px 0 4px rgba(0,0,0,0.1);
-    }
-    
-    thead th:last-child {
-        background-color: #1e40af;
-        z-index: 15;
     }
     
     /* Large screens - show all columns */

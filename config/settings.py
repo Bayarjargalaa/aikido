@@ -100,6 +100,42 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# ДААЛГАВРЫН ШААРДЛАГА: PostgreSQL/MySQL/MariaDB/Oracle
+# SQLite-ээс PostgreSQL руу шилжүүлэх
+# 
+# PostgreSQL ашиглах бол:
+# 1. pip install psycopg2-binary
+# 2. PostgreSQL суулгаад database үүсгэх: CREATE DATABASE aikido_db;
+# 3. Доорх тохиргоог идэвхжүүлэх
+#
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'aikido_db',
+#         'USER': 'postgres',
+#         'PASSWORD': 'your_password',
+#         'HOST': 'localhost',
+#         'PORT': '5432',
+#     }
+# }
+#
+# MySQL ашиглах бол:
+# 1. pip install mysqlclient
+# 2. MySQL суулгаад database үүсгэх: CREATE DATABASE aikido_db;
+# 3. Доорх тохиргоог идэвхжүүлэх
+#
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'aikido_db',
+#         'USER': 'root',
+#         'PASSWORD': 'your_password',
+#         'HOST': 'localhost',
+#         'PORT': '3306',
+#     }
+# }
+
+# Одоогоор SQLite (Development only - Production-д бүү ашигла!)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',

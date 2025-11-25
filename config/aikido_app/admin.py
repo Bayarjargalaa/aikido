@@ -18,8 +18,8 @@ class RankHistoryInline(admin.TabularInline):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ['last_name', 'first_name', 'phone', 'get_rank', 'monthly_fee', 'current_rank_date', 'enrollment_date', 'is_active']
-    list_filter = ['is_active', 'enrollment_date', 'kyu_rank', 'dan_rank']
+    list_display = ['last_name', 'first_name', 'phone', 'get_rank', 'monthly_fee', 'is_fee_exempt', 'current_rank_date', 'enrollment_date', 'is_active']
+    list_filter = ['is_active', 'is_fee_exempt', 'enrollment_date', 'kyu_rank', 'dan_rank']
     search_fields = ['first_name', 'last_name', 'phone', 'email']
     ordering = ['last_name', 'first_name']
     filter_horizontal = ['class_types']
@@ -34,8 +34,8 @@ class StudentAdmin(admin.ModelAdmin):
             'description': 'Кюү эсвэл Дан зэргийн аль нэгийг сонгоно'
         }),
         ('Төлбөрийн мэдээлэл', {
-            'fields': ('monthly_fee', 'fee_note'),
-            'description': 'Сарын төлбөр болон тайлбар'
+            'fields': ('monthly_fee', 'is_fee_exempt', 'fee_note'),
+            'description': 'Сарын төлбөр болон төлбөрөөс чөлөөлөгдсөн эсэх'
         }),
         ('Ангийн мэдээлэл', {
             'fields': ('class_types', 'enrollment_date', 'is_active')

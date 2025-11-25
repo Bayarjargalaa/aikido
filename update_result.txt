@@ -1,0 +1,2 @@
+Bayasgalan now has 1 allowed class type(s)
+  - EVENING

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Айкидо - Монголын Айкидогийн Холбоо</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-gradient-to-r from-blue-900 to-blue-800 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-hand-rock text-3xl text-white mr-3"></i>
+                    <span class="text-white text-xl font-bold">Айкидо</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="{% url 'about' %}" class="text-white hover:text-blue-200 transition">Бидний тухай</a>
+                    <a href="{% url 'login' %}" class="bg-white text-blue-900 px-4 py-2 rounded-lg font-semibold hover:bg-blue-50 transition">Нэвтрэх</a>
+                    <a href="{% url 'register' %}" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition">Бүртгүүлэх</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-900 text-white py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h1 class="text-5xl font-bold mb-6">Монголын Айкидогийн Холбоо</h1>
+            <p class="text-xl mb-8 text-blue-100">Айкидо бол гэмтээхгүйгээр хамгаалах урлаг</p>
+            <div class="flex justify-center space-x-4">
+                <a href="{% url 'register' %}" class="bg-white text-blue-900 px-8 py-3 rounded-lg font-bold hover:bg-blue-50 transition text-lg">
+                    <i class="fas fa-user-plus mr-2"></i>Элсэх
+                </a>
+                <a href="{% url 'about' %}" class="bg-blue-700 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-600 transition text-lg border-2 border-white">
+                    <i class="fas fa-info-circle mr-2"></i>Дэлгэрэнгүй
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Statistics -->
+    <section class="py-16 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="text-center p-6 bg-blue-50 rounded-lg shadow-md">
+                    <i class="fas fa-users text-5xl text-blue-900 mb-4"></i>
+                    <h3 class="text-4xl font-bold text-blue-900 mb-2">{{ total_students }}</h3>
+                    <p class="text-gray-600">Идэвхтэй сурагчид</p>
+                </div>
+                <div class="text-center p-6 bg-green-50 rounded-lg shadow-md">
+                    <i class="fas fa-chalkboard-teacher text-5xl text-green-900 mb-4"></i>
+                    <h3 class="text-4xl font-bold text-green-900 mb-2">{{ total_instructors }}</h3>
+                    <p class="text-gray-600">Мэргэжлийн багш</p>
+                </div>
+                <div class="text-center p-6 bg-purple-50 rounded-lg shadow-md">
+                    <i class="fas fa-calendar-alt text-5xl text-purple-900 mb-4"></i>
+                    <h3 class="text-4xl font-bold text-purple-900 mb-2">{{ class_types.count }}</h3>
+                    <p class="text-gray-600">Ангийн төрөл</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Class Types -->
+    <section class="py-16 bg-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-4xl font-bold text-center mb-12 text-gray-800">Хичээлийн төрлүүд</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {% for class_type in class_types %}
+                <div class="bg-white p-8 rounded-xl shadow-lg hover:shadow-2xl transition transform hover:-translate-y-1">
+                    <div class="text-center">
+                        {% if class_type.class_type == 'MORNING' %}
+                            <i class="fas fa-sun text-6xl text-yellow-500 mb-4"></i>
+                            <h3 class="text-2xl font-bold mb-3 text-gray-800">Өглөөний анги</h3>
+                            <p class="text-gray-600 mb-4">Даваа, Лхагва, Баасан</p>
+                        {% elif class_type.class_type == 'EVENING' %}
+                            <i class="fas fa-moon text-6xl text-blue-600 mb-4"></i>
+                            <h3 class="text-2xl font-bold mb-3 text-gray-800">Оройн анги</h3>
+                            <p class="text-gray-600 mb-4">Даваа, Лхагва, Баасан</p>
+                        {% elif class_type.class_type == 'CHILDREN' %}
+                            <i class="fas fa-child text-6xl text-green-600 mb-4"></i>
+                            <h3 class="text-2xl font-bold mb-3 text-gray-800">Хүүхдийн анги</h3>
+                            <p class="text-gray-600 mb-4">Бямба, Ням</p>
+                        {% endif %}
+                        <p class="text-sm text-gray-500">{{ class_type.description }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="py-16 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-4xl font-bold text-center mb-12 text-gray-800">Яагаад Айкидо вэ?</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div class="text-center p-6">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-heartbeat text-3xl text-blue-900"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2 text-gray-800">Эрүүл мэнд</h3>
+                    <p class="text-gray-600">Бие бялдрыг бэхжүүлж, уян хатан болгоно</p>
+                </div>
+                <div class="text-center p-6">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-shield-alt text-3xl text-green-900"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2 text-gray-800">Өөрийгөө хамгаалах</h3>
+                    <p class="text-gray-600">Гэмтээхгүйгээр өөрийгөө хамгаалах арга</p>
+                </div>
+                <div class="text-center p-6">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-purple-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-brain text-3xl text-purple-900"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2 text-gray-800">Сэтгэлийн тайван</h3>
+                    <p class="text-gray-600">Анхаарал төвлөрөл, тэвчээрийг хөгжүүлнэ</p>
+                </div>
+                <div class="text-center p-6">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-users text-3xl text-red-900"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2 text-gray-800">Хамт олон</h3>
+                    <p class="text-gray-600">Найрсаг, дэмжлэг үзүүлэх орчин</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-16 bg-gradient-to-r from-blue-900 to-blue-800 text-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 class="text-4xl font-bold mb-6">Манай хамт олонд нэгдээрэй!</h2>
+            <p class="text-xl mb-8 text-blue-100">Айкидогийн аялалаа эхлүүлэхэд бэлэн үү?</p>
+            <a href="{% url 'register' %}" class="bg-white text-blue-900 px-10 py-4 rounded-lg font-bold hover:bg-blue-50 transition text-lg inline-block">
+                <i class="fas fa-pen mr-2"></i>Бүртгүүлэх
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <p class="mb-4">© 2025 Монголын Айкидогийн Холбоо. Бүх эрх хуулиар хамгаалагдсан.</p>
+            <div class="flex justify-center space-x-6">
+                <a href="#" class="text-gray-400 hover:text-white transition">
+                    <i class="fab fa-facebook text-2xl"></i>
+                </a>
+                <a href="#" class="text-gray-400 hover:text-white transition">
+                    <i class="fab fa-instagram text-2xl"></i>
+                </a>
+                <a href="#" class="text-gray-400 hover:text-white transition">
+                    <i class="fab fa-youtube text-2xl"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
