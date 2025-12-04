@@ -417,7 +417,7 @@
                             <option value="">-- Сонгох --</option>
                             {% for student in students %}
                             <option value="{{ student.id }}" data-monthly-fee="{{ student.monthly_fee }}">
-                                {{ student.last_name }} {{ student.first_name }}
+                                {{ student.first_name }} {{ student.last_name }} 
                                 {% if student.monthly_fee %}
                                 ({{ student.monthly_fee|floatformat:0 }}₮/сар)
                                 {% endif %}
@@ -475,7 +475,7 @@
                             <option value="">-- Сонгох --</option>
                             {% for student in students %}
                             <option value="{{ student.id }}" data-monthly-fee="{{ student.monthly_fee }}">
-                                {{ student.last_name }} {{ student.first_name }}.
+                                {{ student.first_name }} {{ student.last_name }} .
                             </option>
                             {% endfor %}
                         </select>
@@ -575,7 +575,7 @@
                                 <option value="">-- Сонгох --</option>
                                 {% for student in students %}
                                 <option value="{{ student.id }}">
-                                    {{ student.last_name }} {{ student.first_name }}
+                                    {{ student.first_name }} {{ student.last_name }}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -644,7 +644,7 @@
                                 <option value="">-- Сонгох --</option>
                                 {% for student in students %}
                                 <option value="{{ student.id }}">
-                                    {{ student.last_name }} {{ student.first_name }}
+                                    {{ student.first_name }} {{ student.last_name }}
                                 </option>
                                 {% endfor %}
                             </select>

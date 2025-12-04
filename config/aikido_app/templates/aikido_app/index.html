@@ -60,18 +60,21 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div class="text-center p-6 bg-blue-50 rounded-lg shadow-md">
                     <i class="fas fa-users text-5xl text-blue-900 mb-4"></i>
-                    <h3 class="text-4xl font-bold text-blue-900 mb-2">{{ total_students }}</h3>
-                    <p class="text-gray-600">Идэвхтэй сурагчид</p>
+                    {% comment %} {{ total_students }} {% endcomment %}
+                    <h3 class="text-4xl font-bold text-blue-900 mb-2">Суралцахыг хүссэн хүн бүрт нээлттэй</h3>
+                    {% comment %} <p class="text-gray-600">Идэвхтэй сурагчид</p> {% endcomment %}
                 </div>
                 <div class="text-center p-6 bg-green-50 rounded-lg shadow-md">
                     <i class="fas fa-chalkboard-teacher text-5xl text-green-900 mb-4"></i>
-                    <h3 class="text-4xl font-bold text-green-900 mb-2">{{ total_instructors }}</h3>
-                    <p class="text-gray-600">Мэргэжлийн багш</p>
+                    {% comment %} {{ total_instructors }} {% endcomment %}
+                    <h3 class="text-4xl font-bold text-green-900 mb-2">Олон жил тууштай хичээллэсэн туршлагатай багш нар</h3>
+                    {% comment %} <p class="text-gray-600">Мэргэжлийн багш</p> {% endcomment %}
                 </div>
                 <div class="text-center p-6 bg-purple-50 rounded-lg shadow-md">
                     <i class="fas fa-calendar-alt text-5xl text-purple-900 mb-4"></i>
-                    <h3 class="text-4xl font-bold text-purple-900 mb-2">{{ class_types.count }}</h3>
-                    <p class="text-gray-600">Ангийн төрөл</p>
+                    {% comment %} {{ class_types.count }} {% endcomment %}
+                    <h3 class="text-4xl font-bold text-purple-900 mb-2">Өглөөний анги, Оройн анги, Хүүхдийн анги</h3>
+                    {% comment %} <p class="text-gray-600">Ангийн төрөл</p> {% endcomment %}
                 </div>
             </div>
         </div>

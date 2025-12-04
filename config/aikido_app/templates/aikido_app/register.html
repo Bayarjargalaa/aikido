@@ -30,6 +30,27 @@
 
         <!-- Register Form -->
         <div class="bg-white rounded-2xl shadow-2xl p-8">
+            {% if user.is_authenticated %}
+            <!-- Already Logged In Message -->
+            <div class="text-center py-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                    <i class="fas fa-check-circle text-3xl text-green-600"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">Та аль хэдийн нэвтэрсэн байна</h2>
+                <p class="text-gray-600 mb-6">{{ user.email }} хаягаар нэвтэрсэн байна</p>
+                <div class="space-y-3">
+                    <a href="{% url 'dashboard' %}" 
+                       class="block w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-3 px-4 rounded-lg hover:from-purple-700 hover:to-pink-700 transform hover:scale-[1.02] transition-all duration-200 shadow-lg">
+                        <i class="fas fa-tachometer-alt mr-2"></i>Хяналтын самбар руу очих
+                    </a>
+                    <a href="{% url 'logout' %}" 
+                       class="block w-full bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 transition-all duration-200">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Гарах
+                    </a>
+                </div>
+            </div>
+            {% else %}
+            <!-- Register Form for Non-Authenticated Users -->
             {% if messages %}
             <div class="mb-6">
                 {% for message in messages %}
@@ -43,7 +64,7 @@
             </div>
             {% endif %}
 
-            <form method="post" action="{% url 'register' %}">
+            <form method="post" action="{% url 'register' %}">\n                {% csrf_token %}
                 {% csrf_token %}
                 
                 <!-- Username Input -->
@@ -147,6 +168,7 @@
                     </a>
                 </p>
             </div>
+            {% endif %}
         </div>
 
         <!-- Footer -->

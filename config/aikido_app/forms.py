@@ -226,12 +226,36 @@ class StudentForm(forms.ModelForm):
         cleaned_data = super().clean()
         kyu_rank = cleaned_data.get('kyu_rank')
         dan_rank = cleaned_data.get('dan_rank')
+        first_name = cleaned_data.get('first_name')
+        last_name = cleaned_data.get('last_name')
+        phone = cleaned_data.get('phone')
         
         # Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй
         if kyu_rank and dan_rank:
             raise ValidationError(
                 'Кюү болон Дан зэрэг хоёуланг нь сонгож болохгүй. Нэгийг нь сонгоно уу.'
             )
+        
+        # Давхардсан бүртгэлээс сэргийлэх (овог + нэр + утас)
+        if first_name and last_name and phone:
+            # Хэрэв засч байгаа бол өөрийгөө оруулахгүй
+            existing_query = Student.objects.filter(
+                first_name=first_name,
+                last_name=last_name,
+                phone=phone
+            )
+            
+            # Хэрэв update (засах) хийж байгаа бол тухайн бүртгэлийг хасах
+            if self.instance and self.instance.pk:
+                existing_query = existing_query.exclude(pk=self.instance.pk)
+            
+            if existing_query.exists():
+                existing_student = existing_query.first()
+                raise ValidationError(
+                    f'Ийм мэдээлэлтэй сурагч аль хэдийн бүртгэлтэй байна: '
+                    f'{existing_student.last_name} {existing_student.first_name} ({existing_student.phone}). '
+                    f'Бүртгэгдсэн огноо: {existing_student.enrollment_date.strftime("%Y-%m-%d")}'
+                )
         
         return cleaned_data
 
