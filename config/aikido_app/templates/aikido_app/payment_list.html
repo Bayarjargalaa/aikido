@@ -411,7 +411,15 @@ document.getElementById('cellModal').addEventListener('click', function(e) {
 
 // Year selector change handler
 function changeYear(year) {
-    window.location.href = '?year=' + year;
+    const url = new URL(window.location.href);
+    url.searchParams.set('year', year);
+    window.location.href = url.toString();
+}
+
+function changeSort(sort) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('sort', sort);
+    window.location.href = url.toString();
 }
 </script>
 

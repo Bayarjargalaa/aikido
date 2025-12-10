@@ -28,7 +28,9 @@ from .forms import BankTransactionUploadForm, PaymentAllocationForm, StudentForm
 
 def login_view(request):
     """Нэвтрэх хуудас"""
-    # Don't redirect authenticated users - let them see the page with a message
+    if request.user.is_authenticated:
+        # Нэвтэрсэн хүмүүсийг нүүр хуудас руу шилжүүлэх
+        return redirect('landing')
     
     if request.method == 'POST':
         username = request.POST.get('username')  # Энэ нь имэйл байх болно
@@ -55,7 +57,9 @@ def logout_view(request):
 
 def register_view(request):
     """Бүртгүүлэх хуудас"""
-    # Don't redirect authenticated users - let them see the page with a message
+    if request.user.is_authenticated:
+        # Нэвтэрсэн хүмүүсийг нүүр хуудас руу шилжүүлэх
+        return redirect('landing')
     
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -2825,34 +2829,7 @@ class StudentListView(LoginRequiredMixin, ListView):
     paginate_by = 50
     
     def get_queryset(self):
-        queryset = Student.objects.all()
-        
-        # Эрэмбэлэлт
-        sort = self.request.GET.get('sort', 'date_desc')
-        if sort == 'name_asc':
-            queryset = queryset.order_by('last_name', 'first_name')
-        elif sort == 'name_desc':
-            queryset = queryset.order_by('-last_name', '-first_name')
-        elif sort == 'date_asc':
-            queryset = queryset.order_by('enrollment_date', 'last_name', 'first_name')
-        elif sort == 'rank_desc':
-            # Эхлээд дан зэрэгтэй (өндөрөөс бага), дараа кюү зэрэгтэй (өндөрөөс бага), эцэст зэрэггүй
-            queryset = queryset.order_by(
-                F('dan_rank').desc(nulls_last=True),
-                F('kyu_rank').desc(nulls_last=True),
-                'last_name', 'first_name'
-            )
-        elif sort == 'rank_asc':
-            # Эхлээд зэрэггүй, дараа кюү (багаас өндөр), эцэст дан (багаас өндөр)
-            queryset = queryset.order_by(
-                F('dan_rank').asc(nulls_first=True),
-                F('kyu_rank').asc(nulls_first=True),
-                'last_name', 'first_name'
-            )
-        else:  # date_desc (default)
-            queryset = queryset.order_by('-enrollment_date', 'last_name', 'first_name')
-        
-        # Хайлт
+        queryset = Student.objects.all().order_by('last_name', 'first_name')
         search = self.request.GET.get('search', '')
         if search:
             queryset = queryset.filter(
@@ -2868,7 +2845,6 @@ class StudentListView(LoginRequiredMixin, ListView):
         context['total_students'] = Student.objects.count()
         context['active_students'] = Student.objects.filter(is_active=True).count()
         context['class_types'] = ClassType.objects.all()
-        context['current_sort'] = self.request.GET.get('sort', 'date_desc')
         return context
 
 
@@ -2879,23 +2855,11 @@ class StudentCreateView(LoginRequiredMixin, CreateView):
     template_name = 'aikido_app/student_form.html'
     success_url = reverse_lazy('student_list')
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['class_types'] = ClassType.objects.all()
-        return context
-    
     def form_valid(self, form):
-        try:
-            messages.success(self.request, 'Сурагч амжилттай нэмэгдлээ!')
-            return super().form_valid(form)
-        except Exception as e:
-            messages.error(self.request, f'Алдаа гарлаа: {str(e)}')
-            return self.form_invalid(form)
+        messages.success(self.request, 'Сурагч амжилттай нэмэгдлээ!')
+        return super().form_valid(form)
     
     def form_invalid(self, form):
-        # Debug: Print form errors to console
-        print("Form errors:", form.errors)
-        print("Form data:", form.data)
         messages.error(self.request, 'Алдаа гарлаа. Мэдээллээ шалгана уу.')
         return super().form_invalid(form)
 
@@ -2906,11 +2870,6 @@ class StudentUpdateView(LoginRequiredMixin, UpdateView):
     form_class = StudentForm
     template_name = 'aikido_app/student_form.html'
     success_url = reverse_lazy('student_list')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['class_types'] = ClassType.objects.all()
-        return context
     
     def form_valid(self, form):
         messages.success(self.request, 'Сурагчийн мэдээлэл амжилттай шинэчлэгдлээ!')
